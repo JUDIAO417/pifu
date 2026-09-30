@@ -355,7 +355,7 @@ var GH = {
 };
 
 var state = { data: null, sha: null, _cb: 0 };
-var pendingFile = null, pendingDim = null;
+var pendingFile = null, pendingDim = null, pendingRawUrl = null;
 
 function showLoad(on){ document.getElementById("loadbar").classList.toggle("show", !!on); }
 function showErr(msg){
@@ -569,16 +569,14 @@ document.getElementById("fileInput").addEventListener("change", function(){
 });
 
 /* ===== MineSkin 换肤命令生成（SkinsRestorer /skin url）===== */
-function mineSkinQueue(file, variant, name){
-  var fd = new FormData();
-  fd.append("file", file);
-  fd.append("variant", variant || "classic");
-  if(name) fd.append("name", name);
+function mineSkinQueue(url, variant, name){
+  /* MineSkin 的 name 参数只接受 ASCII，中文名会触发 400，故不传 name（仅作显示用，不影响生成的 UUID） */
+  var payload = JSON.stringify({ url: url, variant: variant || "classic" });
   return new Promise(function(resolve, reject){
     var attempt = 0;
     function once(){
       fetch("https://api.mineskin.org/v2/queue", {
-        method: "POST", headers: { "User-Agent": "SkinGallery/1.0" }, body: fd
+        method: "POST", headers: { "User-Agent": "SkinGallery/1.0", "Content-Type": "application/json" }, body: payload
       }).then(function(r){
         return r.text().then(function(t){
           var data;
@@ -596,7 +594,7 @@ function mineSkinQueue(file, variant, name){
           resolve(data.job.id);
         });
       }).catch(function(e){
-        if(attempt < 3){
+        if(attempt < 5){
           attempt++;
           setTimeout(once, 4000);
         } else {
@@ -658,15 +656,15 @@ document.getElementById("cmdRetryBtn").addEventListener("click", function(){
   var btn = this;
   btn.disabled = true;
   showCmdState("正在重新生成…", "", false);
-  generateSkinCmd(pendingFile, (document.querySelector('input[name="upVariant"]:checked') || {}).value || "classic",
+  generateSkinCmd(pendingRawUrl, (document.querySelector('input[name="upVariant"]:checked') || {}).value || "classic",
     document.getElementById("upName").value.trim())
     .then(function(skin){
       showCmdState('/skin url "https://minesk.in/' + skin.uuid + '"', "已生成，在游戏聊天框发送即可换肤", false);
       toast("换肤命令已生成！");
     })
     .catch(function(err){
-      showCmdState("命令生成失败：" + err.message, "", true);
-      toast("命令生成失败", true);
+      showCmdState("命令生成失败：" + err.message + "。可点击下方重新生成，或手动前往 SkinsRestorer 上传", "", true);
+      toast("命令生成失败，已自动重试 5 次", true);
     })
     .finally(function(){ btn.disabled = false; });
 });
@@ -697,8 +695,9 @@ document.getElementById("upConfirm").addEventListener("click", function(){
       toast("皮肤「" + name + "」已上传，正在生成换肤命令…");
       state._cb = Date.now();
       renderGrid();
+      pendingRawUrl = GH.raw("skins/" + encodeURIComponent(fname));
       showCmdState("正在生成服务器换肤命令…（MineSkin 处理中，约 10-30 秒，失败会自动重试）", "", false);
-      generateSkinCmd(pendingFile, variant, name).then(function(skin){
+      generateSkinCmd(pendingRawUrl, variant, name).then(function(skin){
         showCmdState('/skin url "https://minesk.in/' + skin.uuid + '"', "已生成，复制后在游戏聊天框发送即可换肤", false);
         toast("换肤命令已生成！");
       }).catch(function(err){
