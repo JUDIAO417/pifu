@@ -513,9 +513,9 @@ function faceMat(skinCanvas, x, y, w, h){
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
-  return new THREE.MeshLambertMaterial({ map: tex });
+  return new THREE.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.1 });
 }
-function buildSteve(skinCanvas){
+function buildSteve(skinCanvas, legacy){
   var group = new THREE.Group();
   function part(w, h, d, x, y, z, f){
     var geo = new THREE.BoxGeometry(w, h, d);
@@ -530,6 +530,16 @@ function buildSteve(skinCanvas){
     var mesh = new THREE.Mesh(geo, mats);
     mesh.position.set(x, y, z);
     group.add(mesh);
+  }
+  if(legacy){
+    /* 64×32 旧版皮肤布局（身体/手臂/腿在 16-32 行的紧凑排布） */
+    part(8, 8, 8, 0, 28, 0, { px:[0,8,8,8],   nx:[16,8,8,8],  py:[8,0,8,8],   ny:[16,0,8,8],  pz:[8,8,8,8],    nz:[24,8,8,8] });
+    part(8, 12, 4, 0, 18, 0, { px:[28,20,4,12], nx:[16,20,4,12], py:[20,16,8,4], ny:[28,16,8,4], pz:[20,20,8,12], nz:[32,20,8,12] });
+    part(4, 12, 4, -6, 18, 0, { px:[40,20,4,12], nx:[48,20,4,12], py:[44,16,4,4], ny:[48,16,4,4], pz:[44,20,4,12], nz:[52,20,4,12] });
+    part(4, 12, 4, 6, 18, 0, { px:[32,20,4,12], nx:[44,20,4,12], py:[36,16,4,4], ny:[40,16,4,4], pz:[36,20,4,12], nz:[40,20,4,12] });
+    part(4, 12, 4, -2, 6, 0, { px:[0,20,4,12],  nx:[8,20,4,12],   py:[4,16,4,4],   ny:[8,16,4,4],   pz:[4,20,4,12],   nz:[12,20,4,12] });
+    part(4, 12, 4, 2, 6, 0, { px:[16,20,4,12], nx:[24,20,4,12], py:[20,16,4,4], ny:[24,16,4,4], pz:[20,20,4,12], nz:[28,20,4,12] });
+    return group;
   }
   /* 经典 Steve 皮肤 64×64 UV 区域（px=right, nx=left, py=top, ny=bottom, pz=front, nz=back） */
   part(8, 8, 8, 0, 28, 0, { px:[0,8,8,8],   nx:[16,8,8,8],  py:[8,0,8,8],   ny:[16,0,8,8],  pz:[8,8,8,8],    nz:[24,8,8,8] });
@@ -563,14 +573,7 @@ function initCard3D(canvas){
     } else {
       ctx2.drawImage(img, 0, 0, 64, 64);
     }
-    /* 皮肤没画到的透明区域填浅灰底，避免模型上出现黑块/空白 */
-    var idt = ctx2.getImageData(0, 0, 64, 64);
-    var px = idt.data;
-    for(var pi = 0; pi < px.length; pi += 4){
-      if(px[pi + 3] < 10){ px[pi] = 168; px[pi + 1] = 165; px[pi + 2] = 158; px[pi + 3] = 255; }
-    }
-    ctx2.putImageData(idt, 0, 0);
-    var renderer = null;
+var renderer = null;
     try{
       renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
     }catch(e){ renderer = null; }
@@ -594,7 +597,7 @@ function initCard3D(canvas){
     var dir2 = new THREE.DirectionalLight(0xffffff, 0.3);
     dir2.position.set(-25, 10, -20);
     scene.add(dir2);
-    var model = buildSteve(skinCanvas);
+    var model = buildSteve(skinCanvas, img.height === 32);
     model.rotation.y = -Math.PI / 4;
     scene.add(model);
     var entry = { canvas: canvas, renderer: renderer, scene: scene, camera: camera, model: model, running: true, animId: null, drag: null };
