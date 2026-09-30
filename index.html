@@ -83,7 +83,7 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 }
 .card:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(80,66,50,.2)}
 .card .ph{position:relative;aspect-ratio:1/1;background:#f0ece4;overflow:hidden}
-.card .ph canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;z-index:1}
+.card .ph canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;z-index:1;background:#4a4a4a}
 .card .ph canvas:active{cursor:grabbing}
 .card .ph .fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;z-index:0}
 .card .ph .badge,.card .ph .hint{z-index:2}
@@ -562,6 +562,13 @@ function initCard3D(canvas){
     } else {
       ctx2.drawImage(img, 0, 0, 64, 64);
     }
+    /* 皮肤没画到的透明区域填浅灰底，避免模型上出现黑块/空白 */
+    var idt = ctx2.getImageData(0, 0, 64, 64);
+    var px = idt.data;
+    for(var pi = 0; pi < px.length; pi += 4){
+      if(px[pi + 3] < 10){ px[pi] = 168; px[pi + 1] = 165; px[pi + 2] = 158; px[pi + 3] = 255; }
+    }
+    ctx2.putImageData(idt, 0, 0);
     var renderer = null;
     try{
       renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
@@ -574,6 +581,7 @@ function initCard3D(canvas){
     var w = canvas.clientWidth || 220, h = canvas.clientHeight || 220;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
+    renderer.setClearColor(0x4a4a4a, 1);
     var scene = new THREE.Scene();
     var camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 200);
     camera.position.set(24, 20, 32);
@@ -592,6 +600,8 @@ function initCard3D(canvas){
     renderers.push(entry);
     bindDrag(canvas, entry);
     startLoop(entry);
+    /* 3D 已显示，隐藏底层 2D 图，避免透出 */
+    if(fb){ fb.style.display = "none"; }
   };
   img.onerror = function(){
     if(tries < 2){
