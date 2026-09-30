@@ -454,6 +454,7 @@ function cardHtml(r){
     + '</div>';
 }
 var copyClicks = {};  /* 卡片id -> 最近点击时间戳 */
+var editLock = 0;      /* 编辑复制完成后的锁定时间戳（防误覆盖剪贴板） */
 document.getElementById("skinGrid").addEventListener("click", function(e){
   var btn = e.target.closest("button[data-copy]");
   if(!btn) return;
@@ -461,7 +462,7 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   var rec = null;
   (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
   if(!rec) return;
-  var link = GH.raw("skins/" + encodeURIComponent(rec.file));
+  var link = rec.uuid ? '/skin url "https://minesk.in/' + rec.uuid + '"' : GH.raw("skins/" + encodeURIComponent(rec.file));
   /* 快速连续点击 4 次 → 进入管理编辑复制内容 */
   var now = Date.now();
   var arr = copyClicks[id] || (copyClicks[id] = []);
@@ -473,12 +474,19 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
     if(pw === null) return;
     if(pw !== DELETE_PW){ toast("密码错误，无法编辑", true); return; }
     var edited = prompt("密码已验证，可手动编辑要复制的内容：", link);
-    if(edited === null) return;
-    copyText(edited).then(function(){ toast("已复制编辑后的内容"); }, function(){ toast("复制失败，请手动复制", true); });
+    if(edited === null){ toast("已取消编辑，剪贴板内容未变"); return; }
+    copyText(edited).then(function(){
+      toast("已复制编辑后的内容（请直接粘贴）");
+      editLock = Date.now();
+    }, function(){ toast("复制失败，请手动复制", true); });
+    return;
+  }
+  if(Date.now() - editLock < 4000){
+    toast("刚完成编辑复制，剪贴板已是编辑后的内容，请直接粘贴");
     return;
   }
   copyText(link).then(function(){
-    toast("已复制皮肤下载链接");
+    toast(rec.uuid ? "已复制换肤指令" : "已复制皮肤下载链接");
   }, function(){
     toast("复制失败，请手动复制", true);
   });
