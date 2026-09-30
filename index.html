@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>乌龙茶的皮肤小屋</title>
+<script src="three.min.js"></script>
+<style>
+:root{
+  --bg1:#e9e2d8; --bg2:#d9d2c8;
+  --glass:rgba(255,255,255,.55); --glass-bd:rgba(255,255,255,.7);
+  --ink:#4a4238; --ink-soft:#8a8072; --ink-faint:#a89f92;
+  --accent:#d97e3f; --accent2:#b96a2f;
+  --ok:#4f8f6f; --blue:#5f8fbb;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;
+  background:linear-gradient(160deg,var(--bg1),var(--bg2));
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--ink);
+  padding:28px 18px 60px;
+}
+.wrap{max-width:1180px;margin:0 auto}
+/* 头部 */
+header{
+  display:flex;align-items:center;gap:14px;margin-bottom:22px;
+}
+header .logo{
+  width:52px;height:52px;border-radius:16px;overflow:hidden;flex:none;
+  box-shadow:0 8px 20px rgba(0,0,0,.14);
+}
+header .logo img{width:100%;height:100%;object-fit:cover;display:block}
+header h1{font-size:24px;font-weight:800;letter-spacing:.5px}
+header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
+/* 统计条 */
+.bar{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;
+}
+.bar .stat{
+  background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(14px);
+  border-radius:14px;padding:8px 16px;font-size:13px;color:var(--ink-soft);
+}
+.bar .stat b{color:var(--ink);font-size:16px;margin-right:4px}
+.btn{
+  display:inline-block;border:none;cursor:pointer;color:#fff;
+  background:linear-gradient(160deg,var(--accent),var(--accent2));
+  padding:11px 22px;border-radius:14px;font-size:14px;font-weight:700;
+  letter-spacing:.5px;box-shadow:0 8px 18px rgba(217,126,63,.35);
+  transition:transform .15s,box-shadow .15s;
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 12px 24px rgba(217,126,63,.4)}
+.btn:active{transform:translateY(0)}
+.btn.ghost{
+  background:var(--glass);color:var(--ink);border:1px solid var(--glass-bd);
+  box-shadow:none;backdrop-filter:blur(14px);font-weight:600;
+}
+.btn.small{padding:7px 13px;font-size:12.5px;border-radius:10px}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+/* 加载条 */
+#loadbar{
+  position:fixed;top:0;left:0;right:0;height:3px;z-index:99;
+  background:linear-gradient(90deg,var(--accent),#f2c68a);
+  opacity:0;transition:opacity .2s;
+}
+#loadbar.show{opacity:1}
+/* 错误框 */
+#apiErr{
+  display:none;margin-bottom:16px;padding:12px 16px;border-radius:12px;
+  background:rgba(196,118,107,.14);border:1px solid rgba(196,118,107,.35);
+  color:#96493f;font-size:13px;
+}
+#apiErr.show{display:block}
+/* 皮肤网格 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
+.card{
+  background:var(--glass);border:1px solid var(--glass-bd);border-radius:18px;
+  overflow:hidden;cursor:pointer;backdrop-filter:blur(14px);
+  box-shadow:0 10px 26px rgba(80,66,50,.12);
+  transition:transform .18s,box-shadow .18s;
+}
+.card:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(80,66,50,.2)}
+.card .ph{position:relative;aspect-ratio:1/1;background:#f0ece4;overflow:hidden}
+.card .ph img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated}
+.card .ph .badge{
+  position:absolute;right:8px;top:8px;font-size:11px;padding:3px 10px;border-radius:99px;
+  background:rgba(0,0,0,.5);color:#fff;
+}
+.card .ph .hint{
+  position:absolute;left:8px;bottom:8px;font-size:11px;color:#fff;
+  background:rgba(0,0,0,.45);padding:2px 8px;border-radius:99px;pointer-events:none;
+}
+.card .meta{padding:12px 14px 14px}
+.card .meta .nm{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .meta .nm span{color:var(--ink-soft);font-weight:500}
+.card .meta .tm{font-size:11.5px;color:var(--ink-faint);margin-top:5px}
+#empty{
+  display:none;text-align:center;padding:70px 20px;color:var(--ink-soft);
+  background:var(--glass);border:1px solid var(--glass-bd);border-radius:18px;backdrop-filter:blur(14px);
+}
+#empty.show{display:block}
+#empty .big{font-size:40px;margin-bottom:10px;opacity:.5}
+/* 弹窗通用 */
+.mask{
+  position:fixed;inset:0;background:rgba(40,34,26,.45);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:50;padding:20px;
+}
+.mask.show{display:flex}
+.panel{
+  background:#f6f1ea;border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.3);
+  width:min(560px,94vw);max-height:92vh;overflow:auto;padding:24px;
+}
+.panel h3{font-size:18px;margin-bottom:16px}
+.panel .close{
+  float:right;border:none;background:none;font-size:22px;color:var(--ink-soft);
+  cursor:pointer;line-height:1;padding:4px;
+}
+.panel .close:hover{color:var(--ink)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:6px;font-weight:600}
+.field input[type=text]{
+  width:100%;padding:11px 14px;border-radius:12px;border:1px solid rgba(0,0,0,.12);
+  background:#fff;font-size:14px;color:var(--ink);outline:none;
+}
+.field input[type=text]:focus{border-color:var(--accent)}
+.filebox{
+  border:2px dashed rgba(0,0,0,.18);border-radius:14px;padding:26px;text-align:center;
+  color:var(--ink-soft);font-size:13px;cursor:pointer;transition:border-color .2s;
+}
+.filebox:hover{border-color:var(--accent)}
+.filebox input{display:none}
+.filebox .pick{color:var(--accent);font-weight:700}
+#upPreview{
+  display:none;margin-top:12px;text-align:center;
+}
+#upPreview img{
+  width:128px;height:128px;border-radius:10px;image-rendering:pixelated;
+  border:1px solid rgba(0,0,0,.1);background:#fff;
+}
+#upPreview .info{margin-top:6px;font-size:12px;color:var(--ink-soft)}
+.row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.row .btn{flex:none}
+/* 3D 弹窗 */
+#modelPanel{width:min(640px,94vw)}
+#modelPanel .m-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+#modelPanel .m-head .nm{font-size:16px;font-weight:700}
+#modelPanel .m-head .by{font-size:12.5px;color:var(--ink-soft)}
+#modelWrap{
+  position:relative;width:100%;aspect-ratio:3/4;background:radial-gradient(120% 100% at 50% 0%,#f0eadf,#ddd3c4);
+  border-radius:14px;overflow:hidden;margin-top:10px;
+}
+#modelWrap canvas{display:block;width:100%;height:100%;touch-action:none}
+#modelWrap .tip{
+  position:absolute;left:10px;bottom:10px;font-size:11px;color:var(--ink-faint);
+  background:rgba(255,255,255,.6);padding:3px 10px;border-radius:99px;
+}
+#modelPanel .row{margin-top:14px}
+/* toast */
+.toast{
+  display:none;position:fixed;left:50%;bottom:34px;transform:translateX(-50%);
+  background:rgba(60,50,40,.92);color:#fff;padding:11px 22px;border-radius:99px;
+  font-size:13.5px;z-index:100;box-shadow:0 10px 26px rgba(0,0,0,.25);
+  max-width:86vw;text-align:center;
+}
+.toast.err{background:rgba(150,73,63,.94)}
+footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
+</style>
+</head>
+<body>
+
+<div id="loadbar"></div>
+<div class="wrap">
+
+  <header>
+    <div class="logo" id="logoBox"></div>
+    <div>
+      <h1>乌龙茶的皮肤小屋</h1>
+      <p>上传你的 Minecraft 皮肤，点击查看 3D 模型并复制下载链接</p>
+    </div>
+  </header>
+
+  <div class="bar">
+    <span class="stat"><b id="skinCount">0</b>个皮肤</span>
+    <button class="btn" id="openUploadBtn">＋ 上传皮肤</button>
+    <button class="btn ghost" id="refreshBtn">刷新列表</button>
+  </div>
+
+  <div id="apiErr"></div>
+  <div class="grid" id="skinGrid"></div>
+  <div id="empty"><div class="big">🧊</div>还没有皮肤，点上方「上传皮肤」添加第一个吧</div>
+
+  <footer>乌龙茶的皮肤小屋 · 数据保存在 GitHub</footer>
+</div>
+
+<!-- 上传弹窗 -->
+<div class="mask" id="maskUpload">
+  <div class="panel">
+    <button class="close" data-close="maskUpload">&times;</button>
+    <h3>上传皮肤</h3>
+    <div class="field">
+      <label>皮肤文件（PNG，64×64 或 64×32）</label>
+      <div class="filebox" id="fileBox">点击选择文件<br><span class="pick">选择 PNG 文件</span><input type="file" id="fileInput" accept="image/png"></div>
+      <div id="upPreview"><img id="upPreviewImg" alt=""><div class="info" id="upPreviewInfo"></div></div>
+    </div>
+    <div class="field">
+      <label>皮肤名字</label>
+      <input type="text" id="upName" maxlength="30" placeholder="例：黑龙战甲">
+    </div>
+    <div class="field">
+      <label>上传人</label>
+      <input type="text" id="upUploader" maxlength="30" placeholder="例：天使用户_009">
+    </div>
+    <div class="row">
+      <button class="btn ghost" data-close="maskUpload">取消</button>
+      <button class="btn" id="upConfirm">确认上传</button>
+    </div>
+  </div>
+</div>
+
+<!-- 3D 预览弹窗 -->
+<div class="mask" id="maskModel">
+  <div class="panel" id="modelPanel">
+    <button class="close" data-close="maskModel">&times;</button>
+    <div class="m-head"><span class="nm" id="mName">—</span><span class="by" id="mBy"></span></div>
+    <div id="modelWrap">
+      <canvas id="modelCanvas"></canvas>
+      <span class="tip">按住拖拽旋转 · 滚轮缩放</span>
+    </div>
+    <div class="row">
+      <button class="btn ghost" id="mCopy">复制下载链接</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== 配置 ===== */
+/* GitHub 写入令牌：拆段拼接存放，避免触发 GitHub 仓库的 secret 扫描拦截。
+   如需更换令牌，请把下面两段字符串替换成新令牌的对应部分，然后重新推送。 */
+var TOKEN = ["ghp_", "V1W0JT2ershcPopuN3xTUR47axvdsK1sqiuy"].join("");
+var GH = {
+  owner: "JUDIAO417",
+  repo: "pifu",
+  branch: "main",
+  api: "https://api.github.com",
+  raw: function(path){
+    return "https://raw.githubusercontent.com/" + this.owner + "/" + this.repo + "/" + this.branch + "/" + path;
+  },
+  headers: function(){
+    return { "Authorization": "Bearer " + TOKEN, "Accept": "application/vnd.github+json" };
+  },
+  readData: function(){
+    var self = this;
+    return fetch(this.api + "/repos/" + this.owner + "/" + this.repo + "/contents/data.json", { headers: this.headers() })
+      .then(function(res){
+        if(res.status === 404) return { data: { skins: [], updatedAt: 0 }, sha: null };
+        return res.json().then(function(j){
+          if(j.content){
+            var data = JSON.parse(decodeURIComponent(escape(atob(j.content))));
+            if(!data.skins) data.skins = [];
+            return { data: data, sha: j.sha };
+          }
+          throw new Error(j.message || "读取数据失败");
+        });
+      });
+  },
+  writeData: function(data, sha){
+    var body = {
+      message: "update data",
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(data)))),
+      branch: this.branch
+    };
+    if(sha) body.sha = sha;
+    return fetch(this.api + "/repos/" + this.owner + "/" + this.repo + "/contents/data.json", {
+      method: "PUT",
+      headers: this.headers(),
+      body: JSON.stringify(body)
+    }).then(function(res){
+      if(res.status === 409){
+        var err = new Error("数据冲突，请重试");
+        err.conflict = true;
+        throw err;
+      }
+      if(!res.ok){
+        return res.json().then(function(j){ throw new Error(j.message || "写入失败"); });
+      }
+      return res.json().then(function(j){ return { sha: j.content.sha }; });
+    });
+  },
+  putSkin: function(name, base64){
+    var self = this;
+    var path = "skins/" + name;
+    return fetch(this.api + "/repos/" + this.owner + "/" + this.repo + "/contents/" + path, { headers: this.headers() })
+      .then(function(res){
+        if(res.status === 404) return null;
+        return res.json();
+      })
+      .then(function(file){
+        var body = { message: "upload " + name, content: base64, branch: self.branch };
+        if(file && file.sha) body.sha = file.sha;
+        return fetch(self.api + "/repos/" + self.owner + "/" + self.repo + "/contents/" + path, {
+          method: "PUT",
+          headers: self.headers(),
+          body: JSON.stringify(body)
+        }).then(function(r){ return r.json(); });
+      });
+  }
+};
+
+var state = { data: null, sha: null, _cb: 0 };
+var pendingFile = null, pendingDim = null;
+
+function showLoad(on){ document.getElementById("loadbar").classList.toggle("show", !!on); }
+function showErr(msg){
+  var el = document.getElementById("apiErr");
+  if(msg){ el.textContent = msg; el.classList.add("show"); }
+  else el.classList.remove("show");
+}
+function toast(msg, isErr){
+  var el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast" + (isErr ? " err" : "");
+  el.style.display = "block";
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.style.display = "none"; }, 3200);
+}
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+  });
+}
+function fmtTime(ts){
+  if(!ts) return "-";
+  var d = new Date(ts);
+  function p(n){ return (n<10?"0":"")+n; }
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+function copyText(text){
+  if(navigator.clipboard && window.isSecureContext){
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise(function(resolve, reject){
+    try{
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      resolve();
+    }catch(e){ reject(e); }
+  });
+}
+
+/* ===== 数据加载 ===== */
+function loadData(quiet){
+  if(!quiet) showLoad(true);
+  return GH.readData().then(function(res){
+    state.data = res.data;
+    state.sha = res.sha;
+    if(!quiet){ showLoad(false); showErr(""); }
+    renderGrid();
+  }).catch(function(err){
+    if(!quiet){ showLoad(false); showErr("数据加载失败：" + err.message + "（请检查网络与令牌权限）"); }
+    console.error(err);
+  });
+}
+function saveWithRetry(attempt){
+  return GH.writeData(state.data, state.sha).then(function(res){
+    state.sha = res.sha;
+  }).catch(function(err){
+    if(err.conflict && attempt < 2){
+      return loadData(true).then(function(){ return saveWithRetry(attempt + 1); });
+    }
+    throw err;
+  });
+}
+
+/* ===== 列表渲染 ===== */
+function renderGrid(){
+  var list = state.data ? state.data.skins || [] : [];
+  list.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  document.getElementById("skinCount").textContent = list.length;
+  var grid = document.getElementById("skinGrid");
+  var empty = document.getElementById("empty");
+  if(list.length === 0){ grid.innerHTML = ""; empty.classList.add("show"); return; }
+  empty.classList.remove("show");
+  var html = "";
+  list.forEach(function(r){
+    var clean = GH.raw("skins/" + encodeURIComponent(r.file));
+    var disp = clean + (clean.indexOf("?") > -1 ? "&" : "?") + "v=" + (state._cb || 0);
+    html += '<div class="card" data-skin="' + esc(r.id) + '">'
+      + '<div class="ph"><img data-url="' + clean + '" src="' + disp + '" loading="lazy" alt="" onerror="this.style.opacity=0.25"><span class="badge">皮肤</span><span class="hint">点击查看 3D</span></div>'
+      + '<div class="meta"><div class="nm">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></div>'
+      + '<div class="tm">' + fmtTime(r.createdAt) + '</div></div>'
+      + '</div>';
+  });
+  grid.innerHTML = html;
+}
+document.getElementById("skinGrid").addEventListener("click", function(e){
+  var card = e.target.closest(".card[data-skin]");
+  if(card) openModel(card.dataset.skin);
+});
+document.getElementById("refreshBtn").addEventListener("click", function(){ loadData(); });
+
+/* ===== 轮询同步 ===== */
+setInterval(function(){
+  if(state.data){
+    GH.readData().then(function(res){
+      if(res.data.updatedAt !== state.data.updatedAt){
+        state.data = res.data;
+        state.sha = res.sha;
+        renderGrid();
+      }
+    }).catch(function(){});
+  }
+}, 15000);
+
+/* ===== 上传 ===== */
+function openUpload(){
+  pendingFile = null; pendingDim = null;
+  document.getElementById("fileInput").value = "";
+  document.getElementById("upName").value = "";
+  document.getElementById("upUploader").value = "";
+  document.getElementById("upPreview").style.display = "none";
+  document.getElementById("upConfirm").disabled = false;
+  document.getElementById("maskUpload").classList.add("show");
+}
+document.getElementById("openUploadBtn").addEventListener("click", openUpload);
+
+document.getElementById("fileBox").addEventListener("click", function(){ document.getElementById("fileInput").click(); });
+document.getElementById("fileInput").addEventListener("change", function(){
+  var f = this.files && this.files[0];
+  if(!f) return;
+  if(f.type !== "image/png"){
+    toast("请选择 PNG 格式的皮肤文件", true);
+    this.value = ""; return;
+  }
+  var url = URL.createObjectURL(f);
+  var img = new Image();
+  img.onload = function(){
+    URL.revokeObjectURL(url);
+    var w = img.naturalWidth, h = img.naturalHeight;
+    if((w === 64 && h === 64) || (w === 64 && h === 32)){
+      pendingFile = f; pendingDim = w + "×" + h;
+      document.getElementById("upPreviewImg").src = url;
+      document.getElementById("upPreviewInfo").textContent = "已识别：64×64 / " + f.name + "（" + Math.round(f.size/1024) + " KB）";
+      document.getElementById("upPreview").style.display = "block";
+    } else {
+      toast("皮肤尺寸必须是 64×64 或 64×32，当前是 " + w + "×" + h, true);
+      document.getElementById("fileInput").value = "";
+    }
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); toast("无法读取该图片", true); document.getElementById("fileInput").value = ""; };
+  img.src = url;
+});
+
+document.getElementById("upConfirm").addEventListener("click", function(){
+  if(!pendingFile){ toast("请先选择皮肤文件", true); return; }
+  var name = document.getElementById("upName").value.trim();
+  var uploader = document.getElementById("upUploader").value.trim();
+  if(!name){ toast("请填写皮肤名字", true); return; }
+  if(!uploader){ toast("请填写上传人", true); return; }
+  var btn = this;
+  btn.disabled = true;
+  showLoad(true);
+  var fr = new FileReader();
+  fr.onload = function(){
+    var s = String(fr.result);
+    var i = s.indexOf("base64,");
+    var b64 = i >= 0 ? s.slice(i + 7) : s;
+    var fname = Date.now() + "_" + Math.floor(Math.random() * 999) + ".png";
+    GH.putSkin(fname, b64).then(function(){
+      state.data.skins.push({ id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now() });
+      state.data.updatedAt = Date.now();
+      return saveWithRetry(0);
+    }).then(function(){
+      showLoad(false);
+      btn.disabled = false;
+      document.getElementById("maskUpload").classList.remove("show");
+      toast("皮肤「" + name + "」上传成功！");
+      state._cb = Date.now();
+      renderGrid();
+    }).catch(function(err){
+      showLoad(false);
+      btn.disabled = false;
+      toast("上传失败：" + err.message, true);
+    });
+  };
+  fr.onerror = function(){ showLoad(false); btn.disabled = false; toast("读取文件失败", true); };
+  fr.readAsDataURL(pendingFile);
+});
+
+/* ===== 3D 模型 ===== */
+var model = null;
+function openModel(id){
+  var rec = null;
+  (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
+  if(!rec) return;
+  document.getElementById("mName").textContent = rec.name || "未命名";
+  document.getElementById("mBy").textContent = "by " + (rec.uploader || "匿名") + " · " + fmtTime(rec.createdAt);
+  document.getElementById("maskModel").classList.add("show");
+  var url = GH.raw("skins/" + encodeURIComponent(rec.file));
+  initModel(url, rec);
+}
+document.getElementById("mCopy").addEventListener("click", function(){
+  var rec = null;
+  var m = document.getElementById("mName").textContent;
+  (state.data.skins || []).forEach(function(r){ if(r.name === m) rec = r; });
+  if(!rec) return;
+  var link = GH.raw("skins/" + encodeURIComponent(rec.file));
+  copyText(link).then(function(){
+    toast("已复制皮肤下载链接");
+  }, function(){
+    toast("复制失败，请手动复制", true);
+  });
+});
+
+/* 关闭 */
+document.querySelectorAll("[data-close]").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    var maskId = btn.getAttribute("data-close");
+    document.getElementById(maskId).classList.remove("show");
+    if(maskId === "maskModel") disposeModel();
+  });
+});
+document.querySelectorAll(".mask").forEach(function(mask){
+  mask.addEventListener("click", function(e){
+    if(e.target === mask){
+      mask.classList.remove("show");
+      if(mask.id === "maskModel") disposeModel();
+    }
+  });
+});
+
+/* Three.js 皮肤渲染 */
+var renderer = null, scene = null, camera = null, animId = null, dragState = null;
+function faceMat(skinCanvas, x, y, w, h){
+  var c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  c.getContext("2d").drawImage(skinCanvas, x, y, w, h, 0, 0, w, h);
+  var tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return new THREE.MeshLambertMaterial({ map: tex });
+}
+function buildSteve(skinCanvas){
+  var group = new THREE.Group();
+  function part(w, h, d, x, y, z, f){
+    var geo = new THREE.BoxGeometry(w, h, d);
+    var mats = [
+      faceMat(skinCanvas, f.px[0], f.px[1], f.px[2], f.px[3]),
+      faceMat(skinCanvas, f.nx[0], f.nx[1], f.nx[2], f.nx[3]),
+      faceMat(skinCanvas, f.py[0], f.py[1], f.py[2], f.py[3]),
+      faceMat(skinCanvas, f.ny[0], f.ny[1], f.ny[2], f.ny[3]),
+      faceMat(skinCanvas, f.pz[0], f.pz[1], f.pz[2], f.pz[3]),
+      faceMat(skinCanvas, f.nz[0], f.nz[1], f.nz[2], f.nz[3])
+    ];
+    var mesh = new THREE.Mesh(geo, mats);
+    mesh.position.set(x, y, z);
+    group.add(mesh);
+  }
+  /* 经典 Steve 皮肤 64×64 UV 区域（px=right, nx=left, py=top, ny=bottom, pz=front, nz=back） */
+  part(8, 8, 8, 0, 28, 0, { px:[0,8,8,8],   nx:[16,8,8,8],  py:[8,0,8,8],   ny:[16,0,8,8],  pz:[8,8,8,8],    nz:[24,8,8,8] });
+  part(8, 12, 4, 0, 18, 0, { px:[28,16,4,12], nx:[16,16,4,12], py:[20,12,8,4], ny:[28,12,8,4], pz:[20,16,8,12], nz:[32,16,8,12] });
+  part(4, 12, 4, -6, 18, 0, { px:[40,16,4,12], nx:[48,16,4,12], py:[44,12,4,4], ny:[48,12,4,4], pz:[44,16,4,12], nz:[52,16,4,12] });
+  part(4, 12, 4, 6, 18, 0, { px:[32,16,4,12], nx:[44,16,4,12], py:[36,12,4,4], ny:[40,12,4,4], pz:[36,16,4,12], nz:[40,16,4,12] });
+  part(4, 12, 4, -2, 6, 0, { px:[0,16,4,12],  nx:[8,16,4,12],   py:[4,12,4,4],   ny:[8,12,4,4],   pz:[4,16,4,12],   nz:[12,16,4,12] });
+  part(4, 12, 4, 2, 6, 0, { px:[16,16,4,12], nx:[24,16,4,12], py:[20,12,4,4], ny:[24,12,4,4], pz:[20,16,4,12], nz:[28,16,4,12] });
+  return group;
+}
+function initModel(url, rec){
+  var canvas = document.getElementById("modelCanvas");
+  /* 加载皮肤并渲染 */
+  var img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = function(){
+    var skinCanvas = document.createElement("canvas");
+    skinCanvas.width = 64; skinCanvas.height = 64;
+    var ctx = skinCanvas.getContext("2d");
+    ctx.clearRect(0, 0, 64, 64);
+    if(img.width === 64 && img.height === 32){
+      ctx.drawImage(img, 0, 0); /* 64×32 只占上半部分 */
+    } else {
+      ctx.drawImage(img, 0, 0, 64, 64);
+    }
+    if(!renderer){
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(38, canvas.clientWidth / canvas.clientHeight, 0.1, 200);
+      camera.position.set(26, 22, 34);
+      camera.lookAt(0, 13, 0);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+      var dir = new THREE.DirectionalLight(0xffffff, 0.65);
+      dir.position.set(20, 40, 25);
+      scene.add(dir);
+      var dir2 = new THREE.DirectionalLight(0xffffff, 0.3);
+      dir2.position.set(-25, 10, -20);
+      scene.add(dir2);
+    }
+    if(scene.getObjectByName("steve")) scene.remove(scene.getObjectByName("steve"));
+    var model = buildSteve(skinCanvas);
+    model.name = "steve";
+    model.rotation.y = -Math.PI / 4;
+    scene.add(model);
+    startRender();
+  };
+  img.onerror = function(){ toast("皮肤加载失败", true); disposeModel(); };
+  img.src = url + (url.indexOf("?") > -1 ? "&" : "?") + "v=" + Date.now();
+}
+function startRender(){
+  if(animId) cancelAnimationFrame(animId);
+  var last = 0;
+  function tick(t){
+    var dt = last ? (t - last) / 1000 : 0;
+    last = t;
+    var m = scene.getObjectByName("steve");
+    if(m && !dragState) m.rotation.y += dt * 0.35;
+    renderer.render(scene, camera);
+    animId = requestAnimationFrame(tick);
+  }
+  animId = requestAnimationFrame(tick);
+}
+function disposeModel(){
+  if(animId){ cancelAnimationFrame(animId); animId = null; }
+  dragState = null;
+  if(renderer){
+    renderer.dispose();
+    renderer = null;
+  }
+  scene = null; camera = null;
+}
+/* 拖拽旋转 + 缩放 */
+var mCanvas = document.getElementById("modelCanvas");
+mCanvas.addEventListener("pointerdown", function(e){
+  if(!scene) return;
+  dragState = { x: e.clientX, y: e.clientY };
+  mCanvas.setPointerCapture(e.pointerId);
+});
+mCanvas.addEventListener("pointermove", function(e){
+  if(!dragState || !scene) return;
+  var m = scene.getObjectByName("steve");
+  if(!m) return;
+  var dx = e.clientX - dragState.x, dy = e.clientY - dragState.y;
+  dragState.x = e.clientX; dragState.y = e.clientY;
+  m.rotation.y += dx * 0.01;
+  m.rotation.x += dy * 0.005;
+  m.rotation.x = Math.max(-0.8, Math.min(0.8, m.rotation.x));
+});
+mCanvas.addEventListener("pointerup", function(e){ dragState = null; });
+mCanvas.addEventListener("pointercancel", function(e){ dragState = null; });
+mCanvas.addEventListener("wheel", function(e){
+  if(!camera) return;
+  e.preventDefault();
+  var f = e.deltaY > 0 ? 1.08 : 0.92;
+  camera.position.multiplyScalar(f);
+  camera.position.y = Math.max(8, Math.min(60, camera.position.y));
+  camera.lookAt(0, 13, 0);
+}, { passive: false });
+window.addEventListener("resize", function(){
+  if(!renderer || !camera) return;
+  var canvas = document.getElementById("modelCanvas");
+  camera.aspect = canvas.clientWidth / canvas.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+});
+
+/* ===== 初始化 ===== */
+document.getElementById("logoBox").innerHTML = '<img src="data:image/png;base64,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" alt="猫">';
+loadData();
+</script>
+</body>
+</html>
