@@ -744,10 +744,10 @@ function initCardViewer(canvas){
       height: canvas.clientHeight || 220,
       background: 0x4a4a4a,
       fov: 38,
-      autoRotate: true,
-      autoRotateSpeed: 0.8,
       animation: makeAnim(curAnim)
     });
+    viewer.autoRotate = true;
+    viewer.autoRotateSpeed = 0.8;
   }catch(e){ viewer = null; }
   if(!viewer || !viewer.renderer || !viewer.renderer.getContext()){
     try{ if(viewer) viewer.dispose(); }catch(e){}
