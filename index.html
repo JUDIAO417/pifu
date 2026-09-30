@@ -79,6 +79,7 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .btn.blue{background:linear-gradient(160deg,#5f8fbb,#3f6f96);box-shadow:0 8px 18px rgba(95,143,187,.3)}
 .btn.danger{background:linear-gradient(160deg,#c96a5f,#a4483e);box-shadow:0 8px 18px rgba(201,106,95,.3)}
 .btn.danger:hover{box-shadow:0 12px 24px rgba(201,106,95,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important;box-shadow:none!important}
 .btn.blue:hover{box-shadow:0 12px 24px rgba(95,143,187,.4)}
 .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
 /* 加载条 */
@@ -557,14 +558,35 @@ function mineSkinQueue(file, variant, name){
   fd.append("file", file);
   fd.append("variant", variant || "classic");
   if(name) fd.append("name", name);
-  return fetch("https://api.mineskin.org/v2/queue", {
-    method: "POST", headers: { "User-Agent": "SkinGallery/1.0" }, body: fd
-  }).then(function(r){
-    if(r.status === 429) throw new Error("MineSkin 请求太频繁，请稍等 1 分钟再试");
-    return r.json();
-  }).then(function(data){
-    if(!data || !data.job) throw new Error(data && data.error ? data.error : "MineSkin 无任务返回");
-    return data.job.id;
+  return new Promise(function(resolve, reject){
+    var attempt = 0;
+    function once(){
+      fetch("https://api.mineskin.org/v2/queue", {
+        method: "POST", headers: { "User-Agent": "SkinGallery/1.0" }, body: fd
+      }).then(function(r){
+        return r.text().then(function(t){
+          var data;
+          try{ data = JSON.parse(t); }catch(e){ data = null; }
+          if(!r.ok){
+            if(r.status === 429) throw new Error("MineSkin 请求太频繁，请稍等 1 分钟再试");
+            if(data && data.error) throw new Error("MineSkin：" + data.error);
+            throw new Error("MineSkin 服务异常(" + r.status + ")");
+          }
+          if(!data || !data.job){
+            throw new Error(data && data.error ? data.error : "MineSkin 无任务返回");
+          }
+          resolve(data.job.id);
+        });
+      }).catch(function(e){
+        if(attempt < 3){
+          attempt++;
+          setTimeout(once, 4000);
+        } else {
+          reject(e);
+        }
+      });
+    }
+    once();
   });
 }
 function mineSkinPoll(jobId, cb){
@@ -657,7 +679,7 @@ document.getElementById("upConfirm").addEventListener("click", function(){
       toast("皮肤「" + name + "」已上传，正在生成换肤命令…");
       state._cb = Date.now();
       renderGrid();
-      showCmdState("正在生成服务器换肤命令…（约 10-30 秒）", "", false);
+      showCmdState("正在生成服务器换肤命令…（MineSkin 处理中，约 10-30 秒，失败会自动重试）", "", false);
       generateSkinCmd(pendingFile, variant, name).then(function(skin){
         showCmdState('/skin url "https://minesk.in/' + skin.uuid + '"', "已生成，复制后在游戏聊天框发送即可换肤", false);
         toast("换肤命令已生成！");
