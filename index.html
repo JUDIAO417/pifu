@@ -191,7 +191,6 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
     <div class="logo" id="logoBox"></div>
     <div>
       <h1>乌龙茶的皮肤小屋</h1>
-      <p>上传你的 Minecraft 皮肤，点击查看 3D 模型并复制下载链接</p>
     </div>
   </header>
 
@@ -211,7 +210,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">🧊</div>还没有皮肤，点上方「上传皮肤」添加第一个吧</div>
 
-  <footer>乌龙茶的皮肤小屋 · 数据保存在 GitHub</footer>
+  <footer>乌龙茶的皮肤小屋</footer>
 </div>
 
 <!-- 上传弹窗 -->
@@ -455,6 +454,32 @@ function cardHtml(r){
 }
 var copyClicks = {};  /* 卡片id -> 最近点击时间戳 */
 var editLock = 0;      /* 编辑复制完成后的锁定时间戳（防误覆盖剪贴板） */
+var genBusy = {};      /* 卡片id -> 等待中的 resolve 列表（防重复生成） */
+
+/* 确保该皮肤有换肤指令链接：已有 uuid 直接用；没有则现场调用 MineSkin 生成并保存 */
+function ensureLink(rec){
+  return new Promise(function(resolve){
+    if(rec.uuid){
+      resolve('/skin url "https://minesk.in/' + rec.uuid + '"');
+      return;
+    }
+    if(genBusy[rec.id]){ genBusy[rec.id].push(resolve); return; }
+    genBusy[rec.id] = [resolve];
+    toast("正在生成换肤指令，请稍后…");
+    generateSkinCmd(GH.raw("skins/" + encodeURIComponent(rec.file)), rec.variant || "classic", "").then(function(skin){
+      rec.uuid = skin.uuid;
+      state.data.updatedAt = Date.now();
+      saveWithRetry(0);
+      var cmd = '/skin url "https://minesk.in/' + skin.uuid + '"';
+      genBusy[rec.id].forEach(function(f){ f(cmd); });
+      delete genBusy[rec.id];
+    }).catch(function(e){
+      genBusy[rec.id].forEach(function(f){ f(null); });
+      delete genBusy[rec.id];
+    });
+  });
+}
+
 document.getElementById("skinGrid").addEventListener("click", function(e){
   var btn = e.target.closest("button[data-copy]");
   if(!btn) return;
@@ -462,7 +487,7 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   var rec = null;
   (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
   if(!rec) return;
-  var link = rec.uuid ? '/skin url "https://minesk.in/' + rec.uuid + '"' : GH.raw("skins/" + encodeURIComponent(rec.file));
+  var raw = GH.raw("skins/" + encodeURIComponent(rec.file));
   /* 快速连续点击 4 次 → 进入管理编辑复制内容 */
   var now = Date.now();
   var arr = copyClicks[id] || (copyClicks[id] = []);
@@ -470,25 +495,29 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   while(arr.length && arr[0] < now - 2000) arr.shift();
   if(arr.length >= 4){
     copyClicks[id] = [];
-    var pw = prompt("编辑复制内容需要管理密码：");
-    if(pw === null) return;
-    if(pw !== DELETE_PW){ toast("密码错误，无法编辑", true); return; }
-    var edited = prompt("密码已验证，可手动编辑要复制的内容：", link);
-    if(edited === null){ toast("已取消编辑，剪贴板内容未变"); return; }
-    copyText(edited).then(function(){
-      toast("已复制编辑后的内容（请直接粘贴）");
-      editLock = Date.now();
-    }, function(){ toast("复制失败，请手动复制", true); });
+    ensureLink(rec).then(function(link){
+      var pw = prompt("编辑复制内容需要管理密码：");
+      if(pw === null) return;
+      if(pw !== DELETE_PW){ toast("密码错误，无法编辑", true); return; }
+      var edited = prompt("密码已验证，可手动编辑要复制的内容：", link || raw);
+      if(edited === null){ toast("已取消编辑，剪贴板内容未变"); return; }
+      copyText(edited).then(function(){
+        toast("已复制编辑后的内容（请直接粘贴）");
+        editLock = Date.now();
+      }, function(){ toast("复制失败，请手动复制", true); });
+    });
     return;
   }
   if(Date.now() - editLock < 4000){
     toast("刚完成编辑复制，剪贴板已是编辑后的内容，请直接粘贴");
     return;
   }
-  copyText(link).then(function(){
-    toast(rec.uuid ? "已复制换肤指令" : "已复制皮肤下载链接");
-  }, function(){
-    toast("复制失败，请手动复制", true);
+  ensureLink(rec).then(function(link){
+    if(link){
+      copyText(link).then(function(){ toast("已复制换肤指令"); }, function(){ toast("复制失败，请手动复制", true); });
+    }else{
+      copyText(raw).then(function(){ toast("换肤指令生成失败，已复制下载链接，可稍后重试"); }, function(){ toast("复制失败，请手动复制", true); });
+    }
   });
 });
 document.getElementById("skinGrid").addEventListener("click", function(e){
@@ -663,7 +692,7 @@ document.getElementById("cmdCopy").addEventListener("click", function(){
 document.getElementById("cmdRetryBtn").addEventListener("click", function(){
   var btn = this;
   btn.disabled = true;
-  showCmdState("正在重新生成…", "", false);
+  showCmdState("同步数据中请稍后", "", false);
   generateSkinCmd(pendingRawUrl, (document.querySelector('input[name="upVariant"]:checked') || {}).value || "classic",
     document.getElementById("upName").value.trim())
     .then(function(skin){
@@ -694,23 +723,27 @@ document.getElementById("upConfirm").addEventListener("click", function(){
     var i = s.indexOf("base64,");
     var b64 = i >= 0 ? s.slice(i + 7) : s;
     var fname = Date.now() + "_" + Math.floor(Math.random() * 999) + ".png";
+    var rec = { id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now(), variant: variant };
     GH.putSkin(fname, b64).then(function(){
-      state.data.skins.push({ id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now() });
+      state.data.skins.push(rec);
       state.data.updatedAt = Date.now();
       return saveWithRetry(0);
     }).then(function(){
       showLoad(false);
-      toast("皮肤「" + name + "」已上传，正在生成换肤命令…");
+      toast("皮肤「" + name + "」已上传，正在同步数据…");
       state._cb = Date.now();
       renderGrid();
       pendingRawUrl = GH.raw("skins/" + encodeURIComponent(fname));
-      showCmdState("正在生成服务器换肤命令…（MineSkin 处理中，约 10-30 秒，失败会自动重试）", "", false);
+      showCmdState("同步数据中请稍后", "", false);
       generateSkinCmd(pendingRawUrl, variant, name).then(function(skin){
+        rec.uuid = skin.uuid;
+        state.data.updatedAt = Date.now();
+        saveWithRetry(0);
         showCmdState('/skin url "https://minesk.in/' + skin.uuid + '"', "已生成，复制后在游戏聊天框发送即可换肤", false);
         toast("换肤命令已生成！");
       }).catch(function(err){
-        showCmdState("命令生成失败：" + err.message, "", true);
-        toast("命令生成失败，可重试或手动上传", true);
+        showCmdState("命令生成失败：" + err.message + "。可点击下方重新生成，或手动前往 SkinsRestorer 上传", "", true);
+        toast("命令生成失败，已自动重试 5 次", true);
       });
     }).catch(function(err){
       showLoad(false);
