@@ -85,7 +85,8 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .card .ph{position:relative;aspect-ratio:1/1;background:#f0ece4;overflow:hidden}
 .card .ph canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;z-index:1;background:#4a4a4a}
 .card .ph canvas:active{cursor:grabbing}
-.card .ph .fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;z-index:0}
+.card .ph .fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;z-index:0;-webkit-user-drag:none;user-select:none}
+.card .ph canvas{-webkit-user-drag:none;user-select:none}
 .card .ph .badge,.card .ph .hint{z-index:2}
 .card .ph .badge{
   position:absolute;right:8px;top:8px;font-size:11px;padding:3px 10px;border-radius:99px;
@@ -376,7 +377,7 @@ function cardHtml(r){
   var clean = GH.raw("skins/" + encodeURIComponent(r.file));
   return '<div class="card" data-skin="' + esc(r.id) + '">'
     + '<div class="ph"><canvas data-url="' + clean + '"></canvas>'
-    + '<img class="fallback" data-src="' + clean + '" alt="">'
+    + '<img class="fallback" data-src="' + clean + '" alt="" draggable="false">'
     + '<span class="badge">皮肤</span><span class="hint">按住拖拽旋转</span></div>'
     + '<div class="meta"><div class="nm">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></div>'
     + '<div class="tm">' + fmtTime(r.createdAt) + '</div></div>'
@@ -653,9 +654,11 @@ function disposeAllRenderers(){
 }
 function bindDrag(canvas, entry){
   canvas.addEventListener("pointerdown", function(e){
+    e.preventDefault();
     entry.drag = { x: e.clientX, y: e.clientY };
     try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
   });
+  canvas.addEventListener("dragstart", function(e){ e.preventDefault(); });
   canvas.addEventListener("pointermove", function(e){
     if(!entry.drag) return;
     var dx = e.clientX - entry.drag.x, dy = e.clientY - entry.drag.y;
