@@ -539,6 +539,8 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
     return;
   }
   showLoad(true);
+  try{ localStorage.removeItem("skinv3:" + rec.file); }catch(e){}
+  delete skinCacheMem[rec.file];
   GH.delSkin(rec.file).then(function(){
     state.data.skins = state.data.skins.filter(function(x){ return x.id !== id; });
     state.data.updatedAt = Date.now();
@@ -814,42 +816,69 @@ function makeAnim(type){
     default: return new A.IdleAnimation();
   }
 }
+var skinCacheMem = {};  /* 内存缓存：file -> dataURL */
+/* 皮肤图片持久缓存：首次从仓库下载并存 localStorage，之后本地直接读取（零网络请求） */
+function skinDataUrl(file){
+  var key = "skinv3:" + file;
+  return new Promise(function(resolve){
+    if(skinCacheMem[file]){ resolve(skinCacheMem[file]); return; }
+    var ls = null;
+    try{ ls = localStorage.getItem(key); }catch(e){}
+    if(ls){ skinCacheMem[file] = ls; resolve(ls); return; }
+    var url = GH.raw("skins/" + encodeURIComponent(file));
+    fetch(url).then(function(r){ return r.blob(); }).then(function(blob){
+      var fr = new FileReader();
+      fr.onload = function(){
+        var d = String(fr.result);
+        skinCacheMem[file] = d;
+        try{ localStorage.setItem(key, d); }catch(e){}
+        resolve(d);
+      };
+      fr.readAsDataURL(blob);
+    }).catch(function(){ resolve(url); });
+  });
+}
 function initCardViewer(canvas){
   var url = canvas.getAttribute("data-url");
+  var file = url.split("/").pop();
   var ph = canvas.parentNode;
   var fb = ph.querySelector(".fallback");
-  /* 2D 皮肤图先显示兜底，3D 加载成功后隐藏 */
-  if(fb){
-    fb.onload = function(){ if(fb) fb.style.display = "block"; };
-    fb.onerror = function(){};
-    fb.src = url + "?v=" + Date.now() + "_" + (Math.random() * 1e6 | 0);
-  }
-  var viewer = null;
-  try{
-    viewer = new skinview3d.SkinViewer({
-      canvas: canvas,
-      width: canvas.clientWidth || 220,
-      height: canvas.clientHeight || 220,
-      background: 0x4a4a4a,
-      fov: 38,
-      animation: makeAnim(curAnim)
+  var entry = null;
+  /* 皮肤图片走持久缓存（首次下载后本地直接读取），3D 与 2D 共用同一份数据 */
+  skinDataUrl(file).then(function(d){
+    if(!canvas.isConnected) return;
+    if(fb){
+      fb.onload = function(){ if(fb && fb.dataset.hide !== "1") fb.style.display = "block"; };
+      fb.onerror = function(){};
+      fb.src = d;
+    }
+    var viewer = null;
+    try{
+      viewer = new skinview3d.SkinViewer({
+        canvas: canvas,
+        width: canvas.clientWidth || 220,
+        height: canvas.clientHeight || 220,
+        background: 0x4a4a4a,
+        fov: 38,
+        animation: makeAnim(curAnim)
+      });
+      viewer.autoRotate = true;
+      viewer.autoRotateSpeed = 0.8;
+    }catch(e){ viewer = null; }
+    if(!viewer || !viewer.renderer || !viewer.renderer.getContext()){
+      try{ if(viewer) viewer.dispose(); }catch(e){}
+      return;
+    }
+    viewer.loadSkin(d).then(function(){
+      entry.loaded = true;
+      if(fb){ fb.style.display = "none"; fb.dataset.hide = "1"; }
+    }).catch(function(){
+      /* 3D 加载失败：保留 2D 图 */
     });
-    viewer.autoRotate = true;
-    viewer.autoRotateSpeed = 0.8;
-  }catch(e){ viewer = null; }
-  if(!viewer || !viewer.renderer || !viewer.renderer.getContext()){
-    try{ if(viewer) viewer.dispose(); }catch(e){}
-    return;
-  }
-  var skinUrl = url + "?v=" + Date.now() + "_" + (Math.random() * 1e6 | 0);
-  var loaded = false;
-  viewer.loadSkin(skinUrl).then(function(){
-    loaded = true;
-    if(fb){ fb.style.display = "none"; }
-  }).catch(function(){
-    /* 3D 皮肤加载失败：保留 2D 图 */
+    entry.viewer = viewer;
+    entry.loaded = false;
   });
-  var entry = { canvas: canvas, viewer: viewer, loaded: false };
+  entry = { canvas: canvas, viewer: null, loaded: false };
   viewers.push(entry);
   return entry;
 }
