@@ -79,6 +79,10 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .btn.blue{background:linear-gradient(160deg,#5f8fbb,#3f6f96);box-shadow:0 8px 18px rgba(95,143,187,.3)}
 .btn.danger{background:linear-gradient(160deg,#c96a5f,#a4483e);box-shadow:0 8px 18px rgba(201,106,95,.3)}
 .btn.danger:hover{box-shadow:0 12px 24px rgba(201,106,95,.4)}
+.stbadge{display:inline-block;margin-top:6px;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid transparent;user-select:none;transition:filter .2s}
+.stbadge.off{color:#a8a29e;background:rgba(120,113,108,.1);border-color:rgba(120,113,108,.28)}
+.stbadge.on{color:#16a34a;background:rgba(22,163,74,.13);border-color:rgba(22,163,74,.38)}
+.stbadge:hover{filter:brightness(1.15)}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important;box-shadow:none!important}
 .btn.blue:hover{box-shadow:0 12px 24px rgba(95,143,187,.4)}
 .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
@@ -447,7 +451,8 @@ function cardHtml(r){
     + '<img class="fallback" data-src="' + clean + '" alt="" draggable="false">'
     + '<span class="badge">皮肤</span><span class="hint">按住拖拽旋转</span></div>'
     + '<div class="meta"><div class="nm">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></div>'
-    + '<div class="tm">' + fmtTime(r.createdAt) + '</div></div>'
+    + '<div class="tm">' + fmtTime(r.createdAt) + '</div>'
+    + '<button class="stbadge ' + (r.added ? "on" : "off") + '" data-st="' + esc(r.id) + '" title="点击切换加入状态（需管理密码）">' + (r.added ? "已加入" : "未加入") + '</button></div>'
     + '<div class="ops"><button class="btn small blue" data-copy="' + esc(r.id) + '">复制链接</button>'
     + '<button class="btn small danger" data-del="' + esc(r.id) + '">删除</button></div>'
     + '</div>';
@@ -546,6 +551,31 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   }).catch(function(err){
     showLoad(false);
     toast("删除失败：" + err.message, true);
+  });
+});
+document.getElementById("skinGrid").addEventListener("click", function(e){
+  var sbtn = e.target.closest("button[data-st]");
+  if(!sbtn) return;
+  var id = sbtn.dataset.st;
+  var rec = null;
+  (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
+  if(!rec) return;
+  var pw = prompt("切换「" + (rec.name || "未命名") + "」的加入状态需要管理密码：");
+  if(pw === null) return;
+  if(pw !== DELETE_PW){
+    toast("密码错误，无法切换状态", true);
+    return;
+  }
+  var prev = rec.added;
+  rec.added = !prev;
+  state.data.updatedAt = Date.now();
+  saveWithRetry(0).then(function(){
+    toast(rec.added ? "已标记为「已加入」" : "已标记为「未加入」");
+    state._cb = Date.now();
+    renderGrid();
+  }).catch(function(err){
+    rec.added = prev;
+    toast("状态切换失败：" + err.message, true);
   });
 });
 document.getElementById("refreshBtn").addEventListener("click", function(){ loadData(); });
