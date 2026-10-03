@@ -130,7 +130,11 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .card .ph canvas:active{cursor:grabbing}
 .card .ph .fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;z-index:0;-webkit-user-drag:none;user-select:none}
 .card .ph canvas{-webkit-user-drag:none;user-select:none}
-.card .ph .badge,.card .ph .hint{z-index:2}
+.card .ph .badge,.card .ph .hint,.card .ph .hd-badge{z-index:2}
+.card .ph .hd-badge{
+  position:absolute;left:8px;top:8px;font-size:11px;padding:3px 10px;border-radius:99px;
+  background:rgba(217,126,63,.92);color:#fff;font-weight:600;
+}
 .card .ph .badge{
   position:absolute;right:8px;top:8px;font-size:11px;padding:3px 10px;border-radius:99px;
   background:rgba(0,0,0,.5);color:#fff;
@@ -416,7 +420,7 @@ var GH = {
 };
 
 var state = { data: null, sha: null, _cb: 0 };
-var pendingFile = null, pendingDim = null, pendingRawUrl = null;
+var pendingFile = null, pendingDim = null, pendingRawUrl = null, pendingHd = false;
 
 function showLoad(on){ document.getElementById("loadbar").classList.toggle("show", !!on); }
 function showErr(msg){
@@ -537,6 +541,7 @@ function cardHtml(r){
   return '<div class="card" data-skin="' + esc(r.id) + '">'
     + '<div class="ph"><canvas data-url="' + clean + '"></canvas>'
     + '<img class="fallback" data-src="' + clean + '" alt="" draggable="false">'
+    + (r.hd ? '<span class="hd-badge" title="128 高清皮肤：可预览与存储，无法生成换肤指令">128高清</span>' : '')
     + '<span class="badge">皮肤</span><span class="hint">按住拖拽旋转</span></div>'
     + '<div class="meta"><div class="nm">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></div>'
     + '<div class="tm">' + fmtTime(r.createdAt) + '</div>'
@@ -783,7 +788,7 @@ setInterval(function(){
 
 /* ===== 上传 ===== */
 function openUpload(){
-  pendingFile = null; pendingDim = null;
+  pendingFile = null; pendingDim = null; pendingHd = false;
   document.getElementById("fileInput").value = "";
   document.getElementById("upName").value = "";
   document.getElementById("upUploader").value = "";
@@ -810,13 +815,13 @@ document.getElementById("fileInput").addEventListener("change", function(){
   img.onload = function(){
     URL.revokeObjectURL(url);
     var w = img.naturalWidth, h = img.naturalHeight;
-    if((w === 64 && h === 64) || (w === 64 && h === 32)){
-      pendingFile = f; pendingDim = w + "×" + h;
+    if((w === 64 && h === 64) || (w === 64 && h === 32) || (w === 128 && h === 128)){
+      pendingFile = f; pendingDim = w + "×" + h; pendingHd = (w === 128);
       document.getElementById("upPreviewImg").src = url;
-      document.getElementById("upPreviewInfo").textContent = "已识别：64×64 / " + f.name + "（" + Math.round(f.size/1024) + " KB）";
+      document.getElementById("upPreviewInfo").textContent = (w === 128 ? "已识别：128×128（高清皮肤，无法生成换肤指令）" : "已识别：64×64") + " / " + f.name + "（" + Math.round(f.size/1024) + " KB）";
       document.getElementById("upPreview").style.display = "block";
     } else {
-      toast("皮肤尺寸必须是 64×64 或 64×32，当前是 " + w + "×" + h, true);
+      toast("皮肤尺寸支持 64×64、64×32 或 128×128，当前是 " + w + "×" + h, true);
       document.getElementById("fileInput").value = "";
     }
   };
@@ -943,7 +948,7 @@ document.getElementById("upConfirm").addEventListener("click", function(){
     var b64 = i >= 0 ? s.slice(i + 7) : s;
     var fname = Date.now() + "_" + Math.floor(Math.random() * 999) + ".png";
     var group = document.getElementById("upGroup").value || "";
-    var rec = { id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now(), variant: variant, group: group };
+    var rec = { id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now(), variant: variant, group: group, hd: !!pendingHd };
     GH.putSkin(fname, b64).then(function(){
       state.data.skins.push(rec);
       state.data.updatedAt = Date.now();
@@ -961,6 +966,10 @@ document.getElementById("upConfirm").addEventListener("click", function(){
       }
       renderGrid();
       pendingRawUrl = GH.raw("skins/" + encodeURIComponent(fname));
+      if(rec.hd){
+        showCmdState("128 高清皮肤无法生成换肤指令，仅支持预览与存储", "可点击下方「尝试生成」手动生成，失败不影响使用", true);
+        return;
+      }
       showCmdState("同步数据中请稍后", "", false);
       generateSkinCmd(pendingRawUrl, variant, name).then(function(skin){
         rec.uuid = skin.uuid;
