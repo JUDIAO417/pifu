@@ -62,6 +62,16 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
   border-radius:14px;padding:8px 16px;font-size:13px;color:var(--ink-soft);
 }
 .bar .stat b{color:var(--ink);font-size:16px;margin-right:4px}
+.tabs{
+  display:flex;gap:6px;background:var(--glass);border:1px solid var(--glass-bd);
+  border-radius:14px;padding:4px;backdrop-filter:blur(14px);
+}
+.tab{
+  border:none;background:transparent;padding:8px 16px;border-radius:10px;
+  font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:all .18s;
+}
+.tab.active{background:rgba(255,255,255,.8);color:var(--ink);box-shadow:0 4px 10px rgba(80,66,50,.12)}
+.tab:hover{color:var(--ink)}
 .btn{
   display:inline-block;border:none;cursor:pointer;color:#fff;
   background:linear-gradient(160deg,var(--accent),var(--accent2));
@@ -200,6 +210,10 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
 
   <div class="bar">
     <span class="stat"><b id="skinCount">0</b>个皮肤</span>
+    <div class="tabs" id="groupTabs">
+      <button class="tab" data-tab="all">全部</button>
+      <button class="tab active" data-tab="player">玩家皮肤征集</button>
+    </div>
     <button class="btn" id="openUploadBtn">＋ 上传皮肤</button>
     <button class="btn ghost" id="refreshBtn">刷新列表</button>
     <select class="sel" id="animSel" title="预览动画">
@@ -212,7 +226,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
 
   <div id="apiErr"></div>
   <div class="grid" id="skinGrid"></div>
-  <div id="empty"><div class="big">🧊</div>还没有皮肤，点上方「上传皮肤」添加第一个吧</div>
+  <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
   <footer>乌龙茶的皮肤小屋</footer>
 </div>
@@ -233,6 +247,13 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
         <label><input type="radio" name="upVariant" value="classic" checked> Classic（4px 宽手臂）</label>
         <label><input type="radio" name="upVariant" value="slim"> Slim（3px 细手臂）</label>
       </div>
+    </div>
+    <div class="field">
+      <label>所属分组</label>
+      <select class="sel" id="upGroup" style="width:100%">
+        <option value="玩家皮肤征集">玩家皮肤征集</option>
+        <option value="">未分组</option>
+      </select>
     </div>
     <div class="field">
       <label>皮肤名字</label>
@@ -428,14 +449,27 @@ function saveWithRetry(attempt){
 }
 
 /* ===== 列表渲染 ===== */
+var GROUP_PLAYER = "玩家皮肤征集";  /* 玩家皮肤征集群名称 */
+var activeTab = "player";              /* 默认进入玩家皮肤征集分组 */
+
 function renderGrid(){
-  var list = state.data ? state.data.skins || [] : [];
-  list.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  var all = state.data ? state.data.skins || [] : [];
+  all.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  var list = all.filter(function(r){
+    if(activeTab === "player") return (r.group || "") === GROUP_PLAYER;
+    return true;
+  });
   document.getElementById("skinCount").textContent = list.length;
   var grid = document.getElementById("skinGrid");
   var empty = document.getElementById("empty");
   disposeAllRenderers();
-  if(list.length === 0){ grid.innerHTML = ""; empty.classList.add("show"); return; }
+  if(list.length === 0){
+    grid.innerHTML = "";
+    empty.querySelector(".big").textContent = activeTab === "player" ? "📮" : "🧊";
+    empty.querySelector("p").textContent = activeTab === "player" ? "玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧" : "还没有皮肤，点上方「上传皮肤」添加第一个吧";
+    empty.classList.add("show");
+    return;
+  }
   empty.classList.remove("show");
   var html = "";
   list.forEach(function(r){
@@ -454,6 +488,7 @@ function cardHtml(r){
     + '<div class="tm">' + fmtTime(r.createdAt) + '</div>'
     + '<button class="stbadge ' + (r.added ? "on" : "off") + '" data-st="' + esc(r.id) + '" title="点击切换加入状态（需管理密码）">' + (r.added ? "已加入" : "未加入") + '</button></div>'
     + '<div class="ops"><button class="btn small blue" data-copy="' + esc(r.id) + '">复制链接</button>'
+    + '<button class="btn small blue" data-dl="' + esc(r.id) + '">下载</button>'
     + '<button class="btn small danger" data-del="' + esc(r.id) + '">删除</button></div>'
     + '</div>';
 }
@@ -526,6 +561,34 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   });
 });
 document.getElementById("skinGrid").addEventListener("click", function(e){
+  var dlbtn = e.target.closest("button[data-dl]");
+  if(!dlbtn) return;
+  var id = dlbtn.dataset.dl;
+  var rec = null;
+  (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
+  if(!rec) return;
+  var fname = (rec.name || rec.file) + ".png";
+  skinDataUrl(rec.file).then(function(d){
+    var a = document.createElement("a");
+    if(d.indexOf("data:") === 0){
+      a.href = d; a.download = fname;
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); }, 600);
+      toast("已开始下载「" + (rec.name || "未命名") + "」");
+      return;
+    }
+    /* 跨域回退：先拉成 blob 再触发下载 */
+    fetch(d).then(function(r){ return r.blob(); }).then(function(b){
+      var u = URL.createObjectURL(b);
+      var a2 = document.createElement("a");
+      a2.href = u; a2.download = fname;
+      document.body.appendChild(a2); a2.click();
+      setTimeout(function(){ URL.revokeObjectURL(u); document.body.removeChild(a2); }, 1200);
+      toast("已开始下载「" + (rec.name || "未命名") + "」");
+    }).catch(function(){ toast("下载失败，请检查网络", true); });
+  });
+});
+document.getElementById("skinGrid").addEventListener("click", function(e){
   var dbtn = e.target.closest("button[data-del]");
   if(!dbtn) return;
   var id = dbtn.dataset.del;
@@ -581,6 +644,15 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   });
 });
 document.getElementById("refreshBtn").addEventListener("click", function(){ loadData(); });
+document.getElementById("groupTabs").addEventListener("click", function(e){
+  var t = e.target.closest(".tab");
+  if(!t || t.dataset.tab === activeTab) return;
+  activeTab = t.dataset.tab;
+  document.querySelectorAll("#groupTabs .tab").forEach(function(x){
+    x.classList.toggle("active", x === t);
+  });
+  renderGrid();
+});
 
 /* ===== 轮询同步 ===== */
 setInterval(function(){
@@ -602,6 +674,7 @@ function openUpload(){
   document.getElementById("upName").value = "";
   document.getElementById("upUploader").value = "";
   document.getElementById("upPreview").style.display = "none";
+  document.getElementById("upGroup").value = GROUP_PLAYER;
   document.getElementById("upConfirm").disabled = false;
   document.getElementById("cmdWrap").style.display = "none";
   document.getElementById("cmdRetry").style.display = "none";
@@ -755,15 +828,22 @@ document.getElementById("upConfirm").addEventListener("click", function(){
     var i = s.indexOf("base64,");
     var b64 = i >= 0 ? s.slice(i + 7) : s;
     var fname = Date.now() + "_" + Math.floor(Math.random() * 999) + ".png";
-    var rec = { id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now(), variant: variant };
+    var group = document.getElementById("upGroup").value || "";
+    var rec = { id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now(), variant: variant, group: group };
     GH.putSkin(fname, b64).then(function(){
       state.data.skins.push(rec);
       state.data.updatedAt = Date.now();
       return saveWithRetry(0);
     }).then(function(){
       showLoad(false);
-      toast("皮肤「" + name + "」已上传，正在同步数据…");
+      toast("皮肤「" + name + "」已上传" + (group === GROUP_PLAYER ? "到玩家皮肤征集" : "") + "，正在同步数据…");
       state._cb = Date.now();
+      if(group === GROUP_PLAYER && activeTab !== "player"){
+        activeTab = "player";
+        document.querySelectorAll("#groupTabs .tab").forEach(function(x){
+          x.classList.toggle("active", x.dataset.tab === "player");
+        });
+      }
       renderGrid();
       pendingRawUrl = GH.raw("skins/" + encodeURIComponent(fname));
       showCmdState("同步数据中请稍后", "", false);
