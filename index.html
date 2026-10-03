@@ -584,6 +584,9 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   var rec = null;
   (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
   if(!rec) return;
+  var pw = prompt("下载皮肤「" + (rec.name || "未命名") + "」需要管理密码：");
+  if(pw === null) return;
+  if(pw !== DELETE_PW){ toast("密码错误，无法下载", true); return; }
   var fname = (rec.name || rec.file) + ".png";
   skinDataUrl(rec.file).then(function(d){
     var a = document.createElement("a");
