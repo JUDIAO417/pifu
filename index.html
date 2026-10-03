@@ -93,6 +93,12 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .stbadge.off{color:#a8a29e;background:rgba(120,113,108,.1);border-color:rgba(120,113,108,.28)}
 .stbadge.on{color:#16a34a;background:rgba(22,163,74,.13);border-color:rgba(22,163,74,.38)}
 .stbadge:hover{filter:brightness(1.15)}
+.gbadge{
+  display:inline-block;margin-top:6px;padding:3px 12px;border-radius:999px;
+  font-size:12px;font-weight:600;cursor:pointer;border:1px solid transparent;user-select:none;
+  color:#8a5a2b;background:rgba(217,126,63,.12);border-color:rgba(217,126,63,.35);transition:filter .2s;
+}
+.gbadge:hover{filter:brightness(1.12)}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important;box-shadow:none!important}
 .btn.blue:hover{box-shadow:0 12px 24px rgba(95,143,187,.4)}
 .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
@@ -239,6 +245,26 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
   <footer>乌龙茶的皮肤小屋</footer>
+</div>
+
+<!-- 调整分组弹窗 -->
+<div class="mask" id="maskGrp">
+  <div class="panel" style="width:min(420px,94vw)">
+    <button class="close" data-close="maskGrp">&times;</button>
+    <h3>调整分组</h3>
+    <div class="field">
+      <label id="grpSkinName">皮肤</label>
+      <select class="sel" id="grpSelect" style="width:100%">
+        <option value="">未分组</option>
+        <option value="玩家皮肤征集">玩家皮肤征集</option>
+        <option value="服务器cos皮肤">服务器cos皮肤</option>
+      </select>
+    </div>
+    <div class="row">
+      <button class="btn ghost" data-close="maskGrp">取消</button>
+      <button class="btn" id="grpConfirm">保存</button>
+    </div>
+  </div>
 </div>
 
 <!-- 上传弹窗 -->
@@ -469,6 +495,8 @@ function tabOfGroup(g){
   if(g === GROUP_COS) return "cos";
   return "all";
 }
+/* 分组名显示：空值显示为未分组 */
+function grpName(g){ return g || "未分组"; }
 /* tab id -> 分组名（all 返回 null 表示不过滤） */
 function groupOfTab(t){
   if(t === "player") return GROUP_PLAYER;
@@ -512,6 +540,7 @@ function cardHtml(r){
     + '<span class="badge">皮肤</span><span class="hint">按住拖拽旋转</span></div>'
     + '<div class="meta"><div class="nm">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></div>'
     + '<div class="tm">' + fmtTime(r.createdAt) + '</div>'
+    + '<button class="gbadge" data-grp="' + esc(r.id) + '" title="点击调整分组（需管理密码）">' + esc(grpName(r.group)) + ' ▾</button>'
     + '<button class="stbadge ' + (r.added ? "on" : "off") + '" data-st="' + esc(r.id) + '" title="点击切换加入状态（需管理密码）">' + (r.added ? "已加入" : "未加入") + '</button></div>'
     + '<div class="ops"><button class="btn small blue" data-copy="' + esc(r.id) + '">复制链接</button>'
     + '<button class="btn small blue" data-copyurl="' + esc(r.id) + '">复制2D链接</button>'
@@ -601,6 +630,46 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   copyText(raw).then(function(){
     toast("已复制皮肤图片链接（2D 直链）");
   }, function(){ toast("复制失败，请手动复制", true); });
+});
+var grpTarget = null;  /* 正在调整分组的皮肤 id */
+document.getElementById("skinGrid").addEventListener("click", function(e){
+  var gbtn = e.target.closest("button[data-grp]");
+  if(!gbtn) return;
+  var id = gbtn.dataset.grp;
+  var rec = null;
+  (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
+  if(!rec) return;
+  var pw = prompt("调整「" + (rec.name || "未命名") + "」的分组需要管理密码：");
+  if(pw === null) return;
+  if(pw !== DELETE_PW){ toast("密码错误，无法调整", true); return; }
+  grpTarget = id;
+  document.getElementById("grpSkinName").textContent = "皮肤：" + (rec.name || "未命名");
+  document.getElementById("grpSelect").value = rec.group || "";
+  document.getElementById("maskGrp").classList.add("show");
+});
+document.getElementById("grpConfirm").addEventListener("click", function(){
+  if(!grpTarget) return;
+  var rec = null;
+  (state.data.skins || []).forEach(function(r){ if(r.id === grpTarget) rec = r; });
+  if(!rec){ document.getElementById("maskGrp").classList.remove("show"); return; }
+  var ng = document.getElementById("grpSelect").value;
+  if(ng === (rec.group || "")){
+    document.getElementById("maskGrp").classList.remove("show");
+    toast("分组未变化");
+    return;
+  }
+  var prev = rec.group;
+  rec.group = ng;
+  state.data.updatedAt = Date.now();
+  saveWithRetry(0).then(function(){
+    document.getElementById("maskGrp").classList.remove("show");
+    toast("已调整到「" + grpName(ng) + "」");
+    state._cb = Date.now();
+    renderGrid();
+  }).catch(function(err){
+    rec.group = prev;
+    toast("调整失败：" + err.message, true);
+  });
 });
 document.getElementById("skinGrid").addEventListener("click", function(e){
   var dlbtn = e.target.closest("button[data-dl]");
