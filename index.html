@@ -213,6 +213,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
     <div class="tabs" id="groupTabs">
       <button class="tab" data-tab="all">全部</button>
       <button class="tab active" data-tab="player">玩家皮肤征集</button>
+      <button class="tab" data-tab="cos">服务器cos皮肤</button>
     </div>
     <button class="btn" id="openUploadBtn">＋ 上传皮肤</button>
     <button class="btn ghost" id="refreshBtn">刷新列表</button>
@@ -252,6 +253,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
       <label>所属分组</label>
       <select class="sel" id="upGroup" style="width:100%">
         <option value="玩家皮肤征集">玩家皮肤征集</option>
+        <option value="服务器cos皮肤">服务器cos皮肤</option>
         <option value="">未分组</option>
       </select>
     </div>
@@ -450,23 +452,38 @@ function saveWithRetry(attempt){
 
 /* ===== 列表渲染 ===== */
 var GROUP_PLAYER = "玩家皮肤征集";  /* 玩家皮肤征集群名称 */
+var GROUP_COS = "服务器cos皮肤";      /* 服务器 cos 皮肤分组名称 */
 var activeTab = "player";              /* 默认进入玩家皮肤征集分组 */
+/* 分组名 -> tab id */
+function tabOfGroup(g){
+  if(g === GROUP_PLAYER) return "player";
+  if(g === GROUP_COS) return "cos";
+  return "all";
+}
+/* tab id -> 分组名（all 返回 null 表示不过滤） */
+function groupOfTab(t){
+  if(t === "player") return GROUP_PLAYER;
+  if(t === "cos") return GROUP_COS;
+  return null;
+}
 
 function renderGrid(){
   var all = state.data ? state.data.skins || [] : [];
   all.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
-  var list = all.filter(function(r){
-    if(activeTab === "player") return (r.group || "") === GROUP_PLAYER;
-    return true;
-  });
+  var gname = groupOfTab(activeTab);
+  var list = gname ? all.filter(function(r){ return (r.group || "") === gname; }) : all;
   document.getElementById("skinCount").textContent = list.length;
   var grid = document.getElementById("skinGrid");
   var empty = document.getElementById("empty");
   disposeAllRenderers();
   if(list.length === 0){
     grid.innerHTML = "";
-    empty.querySelector(".big").textContent = activeTab === "player" ? "📮" : "🧊";
-    empty.querySelector("p").textContent = activeTab === "player" ? "玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧" : "还没有皮肤，点上方「上传皮肤」添加第一个吧";
+    empty.querySelector(".big").textContent = activeTab === "player" ? "📮" : activeTab === "cos" ? "🎭" : "🧊";
+    empty.querySelector("p").textContent = activeTab === "player"
+      ? "玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧"
+      : activeTab === "cos"
+        ? "服务器cos皮肤分组还没有皮肤，点上方「上传皮肤」添加一个吧"
+        : "还没有皮肤，点上方「上传皮肤」添加第一个吧";
     empty.classList.add("show");
     return;
   }
@@ -838,10 +855,11 @@ document.getElementById("upConfirm").addEventListener("click", function(){
       showLoad(false);
       toast("皮肤「" + name + "」已上传" + (group === GROUP_PLAYER ? "到玩家皮肤征集" : "") + "，正在同步数据…");
       state._cb = Date.now();
-      if(group === GROUP_PLAYER && activeTab !== "player"){
-        activeTab = "player";
+      var gtab = tabOfGroup(group);
+      if(gtab !== "all" && activeTab !== gtab){
+        activeTab = gtab;
         document.querySelectorAll("#groupTabs .tab").forEach(function(x){
-          x.classList.toggle("active", x.dataset.tab === "player");
+          x.classList.toggle("active", x.dataset.tab === gtab);
         });
       }
       renderGrid();
