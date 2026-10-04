@@ -539,7 +539,7 @@ function renderGrid(){
 function cardHtml(r){
   var clean = GH.raw("skins/" + encodeURIComponent(r.file));
   return '<div class="card" data-skin="' + esc(r.id) + '">'
-    + '<div class="ph"><canvas data-url="' + clean + '"></canvas>'
+    + '<div class="ph"><canvas data-url="' + clean + '" data-variant="' + esc(r.variant || "classic") + '"></canvas>'
     + '<img class="fallback" data-src="' + clean + '" alt="" draggable="false">'
     + (r.hd ? '<span class="hd-badge" title="128 高清皮肤：可预览与存储，无法生成换肤指令">128高清</span>' : '')
     + '<span class="badge">皮肤</span><span class="hint">按住拖拽旋转</span></div>'
@@ -1045,6 +1045,7 @@ function skinDataUrl(file){
 function initCardViewer(canvas){
   var url = canvas.getAttribute("data-url");
   var file = url.split("/").pop();
+  var variant = canvas.getAttribute("data-variant") || "classic";
   var ph = canvas.parentNode;
   var fb = ph.querySelector(".fallback");
   var entry = null;
@@ -1073,7 +1074,7 @@ function initCardViewer(canvas){
       try{ if(viewer) viewer.dispose(); }catch(e){}
       return;
     }
-    viewer.loadSkin(d).then(function(){
+    viewer.loadSkin(d, { model: variant === "slim" ? "slim" : "default" }).then(function(){
       entry.loaded = true;
       if(fb){ fb.style.display = "none"; fb.dataset.hide = "1"; }
     }).catch(function(){
