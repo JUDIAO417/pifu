@@ -349,7 +349,7 @@ var GH = {
   },
   readData: function(){
     var self = this;
-    return fetch(this.api + "/repos/" + this.owner + "/" + this.repo + "/contents/data.json", { headers: this.headers() })
+    return fetch(this.api + "/repos/" + this.owner + "/" + this.repo + "/contents/data.json", { headers: this.headers(), cache: "no-store" })
       .then(function(res){
         if(res.status === 404) return { data: { skins: [], updatedAt: 0 }, sha: null };
         return res.json().then(function(j){
@@ -484,12 +484,16 @@ function loadData(quiet){
     console.error(err);
   });
 }
-function saveWithRetry(attempt){
+/* 冲突重试：数据被他人改过时，基于最新数据重新应用本地变更(reapply)再写，避免覆盖丢失 */
+function saveWithRetry(attempt, reapply){
   return GH.writeData(state.data, state.sha).then(function(res){
     state.sha = res.sha;
   }).catch(function(err){
-    if(err.conflict && attempt < 2){
-      return loadData(true).then(function(){ return saveWithRetry(attempt + 1); });
+    if(err.conflict && attempt < 3){
+      return loadData(true).then(function(){
+        if(reapply) reapply();
+        return saveWithRetry(attempt + 1, reapply);
+      });
     }
     throw err;
   });
@@ -576,7 +580,10 @@ function ensureLink(rec){
     generateSkinCmd(GH.raw("skins/" + encodeURIComponent(rec.file)), rec.variant || "classic", "").then(function(skin){
       rec.uuid = skin.uuid;
       state.data.updatedAt = Date.now();
-      saveWithRetry(0);
+      saveWithRetry(0, function(){
+        state.data.skins.forEach(function(x){ if(x.id === rec.id) x.uuid = rec.uuid; });
+        state.data.updatedAt = Date.now();
+      });
       var cmd = '/skin url "https://minesk.in/' + skin.uuid + '"';
       genBusy[rec.id].forEach(function(f){ f(cmd); });
       delete genBusy[rec.id];
@@ -672,7 +679,10 @@ document.getElementById("grpConfirm").addEventListener("click", function(){
   var prev = rec.group;
   rec.group = ng;
   state.data.updatedAt = Date.now();
-  saveWithRetry(0).then(function(){
+  saveWithRetry(0, function(){
+    state.data.skins.forEach(function(x){ if(x.id === rec.id) x.group = rec.group; });
+    state.data.updatedAt = Date.now();
+  }).then(function(){
     document.getElementById("maskGrp").classList.remove("show");
     toast("已调整到「" + grpName(ng) + "」");
     state._cb = Date.now();
@@ -732,7 +742,10 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   GH.delSkin(rec.file).then(function(){
     state.data.skins = state.data.skins.filter(function(x){ return x.id !== id; });
     state.data.updatedAt = Date.now();
-    return saveWithRetry(0);
+    return saveWithRetry(0, function(){
+      state.data.skins = state.data.skins.filter(function(x){ return x.id !== id; });
+      state.data.updatedAt = Date.now();
+    });
   }).then(function(){
     showLoad(false);
     toast("皮肤已删除");
@@ -759,7 +772,10 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   var prev = rec.added;
   rec.added = !prev;
   state.data.updatedAt = Date.now();
-  saveWithRetry(0).then(function(){
+  saveWithRetry(0, function(){
+    state.data.skins.forEach(function(x){ if(x.id === rec.id) x.added = rec.added; });
+    state.data.updatedAt = Date.now();
+  }).then(function(){
     toast(rec.added ? "已标记为「已加入」" : "已标记为「未加入」");
     state._cb = Date.now();
     renderGrid();
@@ -958,7 +974,12 @@ document.getElementById("upConfirm").addEventListener("click", function(){
     GH.putSkin(fname, b64).then(function(){
       state.data.skins.push(rec);
       state.data.updatedAt = Date.now();
-      return saveWithRetry(0);
+      return saveWithRetry(0, function(){
+        var exist = false;
+        state.data.skins.forEach(function(x){ if(x.id === rec.id) exist = true; });
+        if(!exist) state.data.skins.push(rec);
+        state.data.updatedAt = Date.now();
+      });
     }).then(function(){
       showLoad(false);
       toast("皮肤「" + name + "」已上传" + (group === GROUP_PLAYER ? "到玩家皮肤征集" : "") + "，正在同步数据…");
