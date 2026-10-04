@@ -241,6 +241,11 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
       <option value="walk">动画：行走</option>
       <option value="run">动画：跑步</option>
       <option value="crouch">动画：蹲下</option>
+      <option value="wave">动画：挥手</option>
+      <option value="fly">动画：飞行</option>
+      <option value="swim">动画：游泳</option>
+      <option value="shake">动画：抖抖</option>
+      <option value="rock">动画：摇摆</option>
     </select>
   </div>
 
@@ -1011,12 +1016,41 @@ var curAnim = "idle";
 var io = null;
 var DELETE_PW = "wd198114+";  /* 删除皮肤需输入的管理密码 */
 
+/* 自定义抽象动作：抖抖（高频小幅抖动） */
+function customShake(e, progress){
+  var t = progress * Math.PI * 2 * 9;
+  var s1 = Math.sin(t) * 0.05, s2 = Math.sin(t + 1) * 0.05;
+  e.skin.leftArm.rotation.z = s1;
+  e.skin.rightArm.rotation.z = -s1;
+  e.skin.head.rotation.z = s2;
+  e.skin.body.rotation.z = Math.sin(t + 2) * 0.02;
+  e.skin.leftLeg.rotation.x = Math.sin(t + 3) * 0.03;
+  e.skin.rightLeg.rotation.x = -Math.sin(t + 3) * 0.03;
+}
+/* 自定义抽象动作：摇摆（身体左右晃 + 手臂摆动） */
+function customRock(e, progress){
+  var t = progress * Math.PI * 2;
+  e.skin.body.rotation.z = Math.sin(t) * 0.22;
+  e.skin.body.rotation.x = Math.sin(t * 2) * 0.04;
+  e.skin.head.rotation.z = -Math.sin(t) * 0.3;
+  e.skin.leftArm.rotation.z = Math.sin(t + 1.5) * 0.5;
+  e.skin.leftArm.rotation.x = 0.2;
+  e.skin.rightArm.rotation.z = -Math.sin(t + 1.5) * 0.5;
+  e.skin.rightArm.rotation.x = 0.2;
+  e.skin.leftLeg.rotation.x = Math.sin(t) * 0.18;
+  e.skin.rightLeg.rotation.x = -Math.sin(t) * 0.18;
+}
 function makeAnim(type){
   var A = skinview3d;
   switch(type){
     case "walk": return new A.WalkingAnimation();
     case "run": return new A.RunningAnimation();
     case "crouch": return new A.CrouchAnimation();
+    case "wave": return new A.WaveAnimation();
+    case "fly": return new A.FlyingAnimation();
+    case "swim": return new A.SwimAnimation();
+    case "shake": return new A.FunctionAnimation(customShake);
+    case "rock": return new A.FunctionAnimation(customRock);
     default: return new A.IdleAnimation();
   }
 }
