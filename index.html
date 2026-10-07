@@ -255,7 +255,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v12</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v13</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -605,6 +605,37 @@ function ensureLink(rec){
   });
 }
 
+/* 点击快照卡片 → 升级为实时 3D（可拖拽、可播动画）；池满时回收视口外最远的一张 */
+function evictFarthest(){
+  var best = null, bestD = -1;
+  var ih = window.innerHeight;
+  viewers.forEach(function(v){
+    var r = v.canvas.getBoundingClientRect();
+    if(!r.width) return;
+    var d = Math.max(0, r.bottom - ih) + Math.max(0, 0 - r.top);
+    if(d > bestD){ bestD = d; best = v; }
+  });
+  if(best && bestD > 0){
+    var ph = best.canvas.parentNode;
+    var si = ph ? ph.querySelector(".snap") : null;
+    if(si){ si.style.display = "block"; best.canvas.style.display = "none"; }
+    disposeEntry(best);
+    return true;
+  }
+  return false;
+}
+document.getElementById("skinGrid").addEventListener("click", function(e){
+  var ph = e.target.closest ? e.target.closest(".ph") : null;
+  if(!ph) return;
+  var canvas = ph.querySelector("canvas");
+  if(!canvas) return;
+  var live = viewers.some(function(v){ return v.canvas === canvas && v.viewer; });
+  if(live) return;
+  if(viewers.length >= MAX_VIEWERS){
+    if(!evictFarthest()){ showErr("实时预览已满（浏览器上限约 14 个），请滚动让部分卡片离开屏幕后再试"); return; }
+  }
+  initCardViewer(canvas);
+});
 document.getElementById("skinGrid").addEventListener("click", function(e){
   var btn = e.target.closest("button[data-copy]");
   if(!btn) return;
@@ -1224,8 +1255,8 @@ function pumpSnap(){
     snapRenderer.loadSkin(job.url, { model: job.variant === "slim" ? "slim" : "default" }).then(function(){
       try{
         var frames = [];
-        for(var i = 0; i < 8; i++){
-          snapRenderer.playerObject.rotation.y = i * Math.PI / 4;
+        for(var i = 0; i < 16; i++){
+          snapRenderer.playerObject.rotation.y = i * Math.PI / 8;
           snapRenderer.render();
           frames.push(snapCanvas.toDataURL("image/png"));
         }
@@ -1249,7 +1280,7 @@ function renderSnapFor(canvas){
     img.src = frames[0];
     img.style.display = "block";
     canvas.style.display = "none";
-    snapPlayers[file] = { img: img, frames: frames, idx: 0 };
+    snapPlayers[file] = { img: img, frames: frames, idx: ((Math.random() * frames.length) | 0) };
   });
 }
 /* 快照轮播：让所有快照卡片持续旋转（每 260ms 切一帧） */
@@ -1264,7 +1295,7 @@ function ensureSnapTicker(){
       sp.idx = (sp.idx + 1) % sp.frames.length;
       try{ sp.img.src = sp.frames[sp.idx]; }catch(e){}
     }
-  }, 260);
+  }, 220);
 }
 ensureSnapTicker();
 /* 渲染完成后给所有还没有 3D 的卡片排队渲染快照（全站同时显示 3D） */
