@@ -255,7 +255,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v14</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v15</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -605,24 +605,24 @@ function ensureLink(rec){
   });
 }
 
-/* 点击快照卡片 → 升级为实时 3D（可拖拽、可播动画）；池满时回收视口外最远的一张 */
-function evictFarthest(){
+/* 点击快照卡片 → 升级为实时 3D（可拖拽、可播动画）；池满时优先回收视口外最远的，全在视口内则回收最旧的，保证点击永远有效 */
+function evictOne(){
   var best = null, bestD = -1;
   var ih = window.innerHeight;
-  viewers.forEach(function(v){
+  for(var i = 0; i < viewers.length; i++){
+    var v = viewers[i];
     var r = v.canvas.getBoundingClientRect();
-    if(!r.width) return;
+    if(!r.width) continue;
     var d = Math.max(0, r.bottom - ih) + Math.max(0, 0 - r.top);
     if(d > bestD){ bestD = d; best = v; }
-  });
-  if(best && bestD > 0){
+  }
+  if(!best) best = viewers[0]; /* 全在视口内：回收最旧的一张 */
+  if(best){
     var ph = best.canvas.parentNode;
     var si = ph ? ph.querySelector(".snap") : null;
     if(si){ si.style.display = "block"; best.canvas.style.display = "none"; }
     disposeEntry(best);
-    return true;
   }
-  return false;
 }
 document.getElementById("skinGrid").addEventListener("click", function(e){
   var ph = e.target.closest ? e.target.closest(".ph") : null;
@@ -631,9 +631,7 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   if(!canvas) return;
   var live = viewers.some(function(v){ return v.canvas === canvas && v.viewer; });
   if(live) return;
-  if(viewers.length >= MAX_VIEWERS){
-    if(!evictFarthest()){ showErr("实时预览已满（浏览器上限约 14 个），请滚动让部分卡片离开屏幕后再试"); return; }
-  }
+  if(viewers.length >= MAX_VIEWERS) evictOne();
   initCardViewer(canvas);
 });
 document.getElementById("skinGrid").addEventListener("click", function(e){
