@@ -13,7 +13,10 @@
   --accent:#d97e3f; --accent2:#b96a2f;
   --ok:#4f8f6f; --blue:#5f8fbb;
 }
-*{margin:0;padding:0;box-sizing:border-box}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* 手机端点击卡片不再闪浏览器默认蓝色选择框 */
+button,a,input,select,textarea{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;outline:none}
+input[type=text],input[type=password],input[type=search],textarea{-webkit-user-select:text;user-select:text}
 body{
   min-height:100vh;
   background:linear-gradient(160deg,var(--bg1),var(--bg2));
@@ -316,7 +319,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v25</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v26</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
