@@ -19,7 +19,7 @@ body{
   background:linear-gradient(160deg,var(--bg1),var(--bg2));
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
   color:var(--ink);
-  padding:28px 18px 60px;
+  padding:0 18px 60px;
 }
 .wrap{max-width:1180px;margin:0 auto}
 /* 顶部吸顶栏：向下滚动时始终显示 */
@@ -187,7 +187,7 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 /* 弹窗通用 */
 .mask{
   position:fixed;inset:0;background:rgba(40,34,26,.45);backdrop-filter:blur(4px);
-  display:none;align-items:center;justify-content:center;z-index:50;padding:20px;
+  display:none;align-items:center;justify-content:center;z-index:70;padding:20px;
 }
 .mask.show{display:flex}
 .panel{
@@ -218,8 +218,11 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
   display:none;margin-top:12px;text-align:center;
 }
 #upPreview img{
-  width:128px;height:128px;border-radius:10px;image-rendering:pixelated;
+  display:none;width:128px;height:128px;border-radius:10px;image-rendering:pixelated;
   border:1px solid rgba(0,0,0,.1);background:#fff;
+}
+#upPreview canvas{
+  width:100%;height:220px;border-radius:12px;background:#4a4a4a;display:block;touch-action:none;
 }
 #upPreview .info{margin-top:6px;font-size:12px;color:var(--ink-soft)}
 .row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
@@ -280,7 +283,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v21</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v22</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -311,7 +314,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
     <div class="field">
       <label>皮肤文件（PNG，64×64 或 64×32）</label>
       <div class="filebox" id="fileBox">点击选择文件<br><span class="pick">选择 PNG 文件</span><input type="file" id="fileInput" accept="image/png"></div>
-      <div id="upPreview"><img id="upPreviewImg" alt=""><div class="info" id="upPreviewInfo"></div></div>
+      <div id="upPreview"><img id="upPreviewImg" alt=""><canvas id="upPreviewCanvas"></canvas><div class="info" id="upPreviewInfo"></div></div>
     </div>
     <div class="field">
       <label>皮肤类型</label>
@@ -883,9 +886,22 @@ setInterval(function(){
   }
 }, 15000);
 
+/* 弹窗打开时隐藏吸顶栏，关闭时恢复 */
+(function(){
+  var bar = document.querySelector(".topsticky");
+  if(!bar) return;
+  var mo = new MutationObserver(function(){
+    var anyShow = !!document.querySelector(".mask.show");
+    bar.style.display = anyShow ? "none" : "";
+  });
+  mo.observe(document.body, {subtree:true, attributes:true, attributeFilter:["class"]});
+})();
+
 /* ===== 上传 ===== */
 function openUpload(){
   pendingFile = null; pendingDim = null; pendingHd = false;
+  if(upViewer){ try{ upViewer.dispose(); }catch(e){} upViewer = null; }
+  upSkinData = null;
   document.getElementById("fileInput").value = "";
   document.getElementById("upName").value = "";
   document.getElementById("upUploader").value = "";
@@ -900,6 +916,27 @@ function openUpload(){
 document.getElementById("openUploadBtn").addEventListener("click", openUpload);
 
 document.getElementById("fileBox").addEventListener("click", function(){ document.getElementById("fileInput").click(); });
+var upViewer = null, upSkinData = null;
+function getUpVariant(){ return document.querySelector('input[name="upVariant"]:checked').value; }
+function showUpPreview3D(url){
+  upSkinData = url;
+  if(!upViewer){
+    var cv = document.getElementById("upPreviewCanvas");
+    try{
+      upViewer = new skinview3d.SkinViewer({
+        canvas: cv,
+        width: cv.clientWidth || 240,
+        height: 220,
+        background: 0x4a4a4a,
+        fov: 38,
+        animation: makeAnim(curAnim)
+      });
+      upViewer.autoRotate = true;
+      upViewer.autoRotateSpeed = 1;
+    }catch(e){ upViewer = null; }
+  }
+  if(upViewer) upViewer.loadSkin(url, { model: getUpVariant() === "slim" ? "slim" : "default" });
+}
 document.getElementById("fileInput").addEventListener("change", function(){
   var f = this.files && this.files[0];
   if(!f) return;
@@ -907,23 +944,32 @@ document.getElementById("fileInput").addEventListener("change", function(){
     toast("请选择 PNG 格式的皮肤文件", true);
     this.value = ""; return;
   }
-  var url = URL.createObjectURL(f);
-  var img = new Image();
-  img.onload = function(){
-    URL.revokeObjectURL(url);
-    var w = img.naturalWidth, h = img.naturalHeight;
-    if((w === 64 && h === 64) || (w === 64 && h === 32) || (w === 128 && h === 128)){
-      pendingFile = f; pendingDim = w + "×" + h; pendingHd = (w === 128);
-      document.getElementById("upPreviewImg").src = url;
-      document.getElementById("upPreviewInfo").textContent = (w === 128 ? "已识别：128×128（高清皮肤，无法生成换肤指令）" : "已识别：64×64") + " / " + f.name + "（" + Math.round(f.size/1024) + " KB）";
-      document.getElementById("upPreview").style.display = "block";
-    } else {
-      toast("皮肤尺寸支持 64×64、64×32 或 128×128，当前是 " + w + "×" + h, true);
-      document.getElementById("fileInput").value = "";
-    }
+  var fr = new FileReader();
+  fr.onload = function(){
+    var url = String(fr.result);
+    var img = new Image();
+    img.onload = function(){
+      var w = img.naturalWidth, h = img.naturalHeight;
+      if((w === 64 && h === 64) || (w === 64 && h === 32) || (w === 128 && h === 128)){
+        pendingFile = f; pendingDim = w + "×" + h; pendingHd = (w === 128);
+        document.getElementById("upPreviewImg").src = url;
+        document.getElementById("upPreviewInfo").textContent = (w === 128 ? "已识别：128×128（高清皮肤，无法生成换肤指令）" : "已识别：64×64") + " / " + f.name + "（" + Math.round(f.size/1024) + " KB）";
+        document.getElementById("upPreview").style.display = "block";
+        showUpPreview3D(url);
+      } else {
+        toast("皮肤尺寸支持 64×64、64×32 或 128×128，当前是 " + w + "×" + h, true);
+        document.getElementById("fileInput").value = "";
+      }
+    };
+    img.onerror = function(){ toast("无法读取该图片", true); document.getElementById("fileInput").value = ""; };
+    img.src = url;
   };
-  img.onerror = function(){ URL.revokeObjectURL(url); toast("无法读取该图片", true); document.getElementById("fileInput").value = ""; };
-  img.src = url;
+  fr.onerror = function(){ toast("无法读取该文件", true); document.getElementById("fileInput").value = ""; };
+  fr.readAsDataURL(f);
+});
+/* 皮肤类型切换时重载 3D 预览 */
+document.querySelectorAll('input[name="upVariant"]').forEach(function(r){
+  r.addEventListener("change", function(){ if(upSkinData) showUpPreview3D(upSkinData); });
 });
 
 /* ===== MineSkin 换肤命令生成（SkinsRestorer /skin url）===== */
