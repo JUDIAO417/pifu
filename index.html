@@ -1177,6 +1177,23 @@ function disposeEntry(entry){
   if(i > -1) viewers.splice(i, 1);
 }
 function disposeAllRenderers(){ while(viewers.length) disposeEntry(viewers[0]); }
+/* 延迟创建队列：WebGL 并发满且所有卡片都在视口内时排队，等空位再补 */
+var pendingViewers = [];
+var lateInitTimer = null;
+function scheduleLateInit(canvas){
+  if(pendingViewers.indexOf(canvas) > -1) return;
+  pendingViewers.push(canvas);
+  if(!lateInitTimer){
+    lateInitTimer = setInterval(function(){
+      if(!pendingViewers.length) return;
+      if(viewers.length >= MAX_VIEWERS) return;
+      var canvas2 = pendingViewers.shift();
+      if(!canvas2 || !canvas2.isConnected) return;
+      var r = canvas2.getBoundingClientRect();
+      if(r.bottom >= 0 && r.top <= window.innerHeight) initCardViewer(canvas2);
+    }, 1200);
+  }
+}
 function observeCards(){
   if(!io && typeof IntersectionObserver !== "undefined"){
     io = new IntersectionObserver(function(entries){
@@ -1190,7 +1207,7 @@ function observeCards(){
           if(entry){
             resumeEntry(entry);
           } else {
-            /* 超限时回收最早创建且离开视口的 */
+            /* 超限时优先回收离开视口的最早卡片；全部在视口内则延迟创建，绝不销毁可见的 3D */
             if(viewers.length >= MAX_VIEWERS){
               var oldest = null;
               for(var k = 0; k < viewers.length; k++){
@@ -1200,7 +1217,7 @@ function observeCards(){
                 }
               }
               if(oldest) disposeEntry(oldest);
-              else disposeEntry(viewers[0]);
+              else { scheduleLateInit(canvas); return; }
             }
             initCardViewer(canvas);
           }
