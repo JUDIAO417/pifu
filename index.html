@@ -31,6 +31,10 @@ body{
   box-shadow:0 6px 18px rgba(60,50,30,.05);
   margin:0 calc(50% - 50vw);padding:0 calc(50vw - 50%) 2px;
 }
+@media (max-width:700px){
+  #searchInput{width:auto;flex:1;min-width:0;padding:8px 10px;font-size:12.5px}
+  header h1{font-size:19px}
+}
 /* 头部 */
 header{
   display:flex;align-items:center;gap:14px;margin-bottom:16px;
@@ -42,6 +46,13 @@ header .logo{
 header .logo img{width:100%;height:100%;object-fit:cover;display:block}
 header h1{font-size:24px;font-weight:800;letter-spacing:.5px}
 header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
+#searchInput{
+  margin-left:auto;width:230px;padding:9px 14px;font-size:13px;color:var(--ink);
+  background:var(--glass);border:1px solid var(--glass-bd);border-radius:12px;
+  outline:none;backdrop-filter:blur(14px);transition:border-color .15s,box-shadow .15s;
+}
+#searchInput:focus{border-color:rgba(217,126,63,.5);box-shadow:0 0 0 3px rgba(217,126,63,.12)}
+#searchInput::placeholder{color:var(--ink-faint)}
 /* 选择器 / 命令区 */
 .sel{
   background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(14px);
@@ -151,8 +162,9 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
   background:rgba(0,0,0,.5);color:#fff;
 }
 .card .ph .hint{
-  position:absolute;left:8px;bottom:8px;font-size:11px;color:#fff;
-  background:rgba(0,0,0,.45);padding:2px 8px;border-radius:99px;pointer-events:none;
+  position:absolute;left:50%;transform:translateX(-50%);bottom:10px;
+  font-size:12px;font-weight:600;color:#fff;white-space:nowrap;
+  background:rgba(0,0,0,.6);padding:4px 12px;border-radius:99px;pointer-events:none;
 }
 .card .meta{padding:12px 14px 6px}
 .card .ops{padding:8px 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -249,6 +261,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
     <div>
       <h1>乌龙茶的皮肤小屋</h1>
     </div>
+    <input type="search" id="searchInput" placeholder="搜索皮肤名 / 上传人" autocomplete="off">
   </header>
 
   <div class="bar">
@@ -283,7 +296,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v22</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v23</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -535,6 +548,13 @@ function saveWithRetry(attempt, reapply){
 var GROUP_PLAYER = "玩家皮肤征集";  /* 玩家皮肤征集群名称 */
 var GROUP_COS = "服务器cos皮肤";      /* 服务器 cos 皮肤分组名称 */
 var activeTab = "player";              /* 默认进入玩家皮肤征集分组 */
+var searchVal = "";                    /* 搜索关键词 */
+var searchT = null;
+document.getElementById("searchInput").addEventListener("input", function(){
+  searchVal = this.value;
+  clearTimeout(searchT);
+  searchT = setTimeout(function(){ renderGrid(); }, 250);
+});
 /* 分组名 -> tab id */
 function tabOfGroup(g){
   if(g === GROUP_PLAYER) return "player";
@@ -559,6 +579,12 @@ function renderGrid(){
   all.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
   var gname = groupOfTab(activeTab);
   var list = gname ? all.filter(function(r){ return (r.group || "") === gname; }) : all;
+  var kw = (searchVal || "").trim().toLowerCase();
+  if(kw){
+    list = list.filter(function(r){
+      return (((r.name || "") + " " + (r.uploader || "")).toLowerCase().indexOf(kw) >= 0);
+    });
+  }
   document.getElementById("skinCount").textContent = list.length;
   var grid = document.getElementById("skinGrid");
   var empty = document.getElementById("empty");
