@@ -69,6 +69,7 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .bar{
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;
 }
+.bar-r1,.bar-r2{display:contents} /* 桌面端：两行内容直接并入 .bar 的 flex 流 */
 .bar .stat{
   background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(14px);
   border-radius:14px;padding:8px 16px;font-size:13px;color:var(--ink-soft);
@@ -167,6 +168,15 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
   .bar{gap:10px}
   header h1{font-size:20px}
   .tab{padding:8px 12px;font-size:12.5px}
+  /* 手机端：顶部栏固定两排——第一排统计+分类标签，第二排上传/刷新/动画 */
+  .bar{flex-direction:column;align-items:stretch;gap:8px}
+  .bar-r1{display:flex;align-items:center;gap:8px}
+  .bar-r1 .stat{flex:none;padding:7px 12px;font-size:12.5px}
+  .bar-r1 .tabs{flex:1;min-width:0;justify-content:space-between}
+  .bar-r1 .tab{padding:7px 8px;font-size:12px;white-space:nowrap}
+  .bar-r2{display:flex;gap:8px}
+  .bar-r2 .btn{flex:1;padding:9px 6px;font-size:13px;text-align:center}
+  .bar-r2 .sel{flex:1;padding:9px 8px;font-size:12.5px;min-width:0}
 }
 .card .meta .nm{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card .meta .nm span{color:var(--ink-soft);font-weight:500}
@@ -242,26 +252,30 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   </header>
 
   <div class="bar">
-    <span class="stat"><b id="skinCount">0</b>个皮肤</span>
-    <div class="tabs" id="groupTabs">
-      <button class="tab" data-tab="all">全部</button>
-      <button class="tab active" data-tab="player">玩家皮肤征集</button>
-      <button class="tab" data-tab="cos">服务器cos皮肤</button>
+    <div class="bar-r1">
+      <span class="stat"><b id="skinCount">0</b>个皮肤</span>
+      <div class="tabs" id="groupTabs">
+        <button class="tab" data-tab="all">全部</button>
+        <button class="tab active" data-tab="player">玩家皮肤征集</button>
+        <button class="tab" data-tab="cos">服务器cos皮肤</button>
+      </div>
     </div>
-    <button class="btn" id="openUploadBtn">＋ 上传皮肤</button>
-    <button class="btn ghost" id="refreshBtn">刷新列表</button>
-    <select class="sel" id="animSel" title="预览动画">
-      <option value="idle">动画：空闲</option>
-      <option value="walk">动画：行走</option>
-      <option value="run">动画：跑步</option>
-      <option value="crouch">动画：蹲下</option>
-      <option value="wave">动画：挥手</option>
-      <option value="fly">动画：飞行</option>
-      <option value="swim">动画：游泳</option>
-      <option value="shake">动画：抖抖</option>
-      <option value="rock">动画：摇摆</option>
-      <option value="bear">动画：狗熊哆嗦毛</option>
-    </select>
+    <div class="bar-r2">
+      <button class="btn" id="openUploadBtn">＋ 上传皮肤</button>
+      <button class="btn ghost" id="refreshBtn">刷新列表</button>
+      <select class="sel" id="animSel" title="预览动画">
+        <option value="idle">动画：空闲</option>
+        <option value="walk">动画：行走</option>
+        <option value="run">动画：跑步</option>
+        <option value="crouch">动画：蹲下</option>
+        <option value="wave">动画：挥手</option>
+        <option value="fly">动画：飞行</option>
+        <option value="swim">动画：游泳</option>
+        <option value="shake">动画：抖抖</option>
+        <option value="rock">动画：摇摆</option>
+        <option value="bear">动画：狗熊哆嗦毛</option>
+      </select>
+    </div>
   </div>
   </div>
 
@@ -269,7 +283,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v19</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v20</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
