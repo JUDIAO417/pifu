@@ -255,7 +255,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v15</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v16</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -605,6 +605,17 @@ function ensureLink(rec){
   });
 }
 
+/* 点击卡片 → 激活为唯一实时 3D（旋转+动画）；此前活跃的实时卡全部恢复静态正面 */
+function activateCard(canvas){
+  while(viewers.length){
+    var v = viewers[0];
+    var ph = v.canvas.parentNode;
+    var si = ph ? ph.querySelector(".snap") : null;
+    if(si && si.src){ si.style.display = "block"; v.canvas.style.display = "none"; }
+    disposeEntry(v);
+  }
+  initCardViewer(canvas);
+}
 /* 点击快照卡片 → 升级为实时 3D（可拖拽、可播动画）；池满时优先回收视口外最远的，全在视口内则回收最旧的，保证点击永远有效 */
 function evictOne(){
   var best = null, bestD = -1;
@@ -631,8 +642,7 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
   if(!canvas) return;
   var live = viewers.some(function(v){ return v.canvas === canvas && v.viewer; });
   if(live) return;
-  if(viewers.length >= MAX_VIEWERS) evictOne();
-  initCardViewer(canvas);
+  activateCard(canvas);
 });
 document.getElementById("skinGrid").addEventListener("click", function(e){
   var btn = e.target.closest("button[data-copy]");
@@ -1202,7 +1212,6 @@ function initCardViewer(canvas){
       if(fb){ fb.style.display = "none"; fb.dataset.hide = "1"; }
       var si = ph.querySelector(".snap");
       if(si){ si.style.display = "none"; }
-      delete snapPlayers[file];
       canvas.style.display = "";
     }).catch(function(){
       /* 3D 加载失败：保留 2D 图 */
@@ -1252,15 +1261,11 @@ function pumpSnap(){
   try{
     snapRenderer.loadSkin(job.url, { model: job.variant === "slim" ? "slim" : "default" }).then(function(){
       try{
-        var frames = [];
-        for(var i = 0; i < 16; i++){
-          snapRenderer.playerObject.rotation.y = i * Math.PI / 8;
-          snapRenderer.render();
-          frames.push(snapCanvas.toDataURL("image/png"));
-        }
-        snapCache[job.file] = frames;
+        snapRenderer.playerObject.rotation.y = 0;
+        snapRenderer.render();
+        snapCache[job.file] = snapCanvas.toDataURL("image/png");
         snapBusy = false;
-        job.cb(frames);
+        job.cb(snapCache[job.file]);
       }catch(e){ snapBusy = false; job.cb(null); }
       pumpSnap();
     }).catch(function(){ snapBusy = false; job.cb(null); pumpSnap(); });
@@ -1272,30 +1277,13 @@ function renderSnapFor(canvas){
   if(!img) return;
   var url = canvas.getAttribute("data-url");
   var variant = canvas.getAttribute("data-variant") || "classic";
-  skinSnapshot(url, variant, function(frames){
-    if(!canvas.isConnected || !frames || !frames.length) return;
-    var file = url.split("/").pop();
-    img.src = frames[0];
+  skinSnapshot(url, variant, function(d){
+    if(!canvas.isConnected || !d) return;
+    img.src = d;
     img.style.display = "block";
     canvas.style.display = "none";
-    snapPlayers[file] = { img: img, frames: frames, idx: ((Math.random() * frames.length) | 0) };
   });
 }
-/* 快照轮播：让所有快照卡片持续旋转（每 260ms 切一帧） */
-var snapPlayers = {};
-var snapTicker = null;
-function ensureSnapTicker(){
-  if(snapTicker) return;
-  snapTicker = setInterval(function(){
-    for(var k in snapPlayers){
-      var sp = snapPlayers[k];
-      if(!sp.img || !sp.img.isConnected){ delete snapPlayers[k]; continue; }
-      sp.idx = (sp.idx + 1) % sp.frames.length;
-      try{ sp.img.src = sp.frames[sp.idx]; }catch(e){}
-    }
-  }, 220);
-}
-ensureSnapTicker();
 /* 渲染完成后给所有还没有 3D 的卡片排队渲染快照（全站同时显示 3D） */
 /* 并行预取全部皮肤图片（浏览器并发 6 路下载+缓存），让快照/实时的 loadSkin 直接读内存，显著加快全站 3D 就绪速度 */
 function preloadAllSkins(){
@@ -1325,12 +1313,8 @@ function observeCards(){
           if(entry){
             resumeEntry(entry);
           } else {
-            /* 实时 3D 满额：不销毁任何已加载的，其余卡片直接渲染 3D 快照显示 */
-            if(viewers.length >= MAX_VIEWERS){
-              renderSnapFor(canvas);
-              return;
-            }
-            initCardViewer(canvas);
+            /* 全部卡片默认静态 3D 快照；点击卡片时才激活唯一实时模型 */
+            renderSnapFor(canvas);
           }
         } else if(entry){
           pauseEntry(entry);
