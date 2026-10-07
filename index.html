@@ -187,8 +187,19 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
   .bar-r2 .btn{flex:1;padding:9px 6px;font-size:13px;text-align:center}
   .bar-r2 .sel{flex:1;padding:9px 8px;font-size:12.5px;min-width:0}
 }
-.card .meta .nm{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.card .meta .nm span{color:var(--ink-soft);font-weight:500}
+.card .meta .nm{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700}
+.card .meta .nm .nmt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .meta .nm .nmt span{color:var(--ink-soft);font-weight:500}
+.likeb{
+  margin-left:auto;flex:none;display:flex;align-items:center;gap:3px;
+  border:1px solid var(--glass-bd);background:rgba(255,255,255,.65);
+  border-radius:99px;padding:3px 10px;font-size:12.5px;color:var(--ink-soft);
+  cursor:pointer;transition:transform .15s,background .15s,color .15s;font-family:inherit;
+}
+.likeb em{font-style:normal;font-weight:800;color:var(--ink)}
+.likeb:hover{transform:scale(1.1)}
+.likeb.on{background:#ff5d5d;border-color:#ff5d5d;color:#fff}
+.likeb.on em{color:#fff}
 .card .meta .tm{font-size:11.5px;color:var(--ink-faint);margin-top:5px}
 #empty{
   display:none;text-align:center;padding:70px 20px;color:var(--ink-soft);
@@ -305,7 +316,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v24</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v25</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -600,7 +611,11 @@ function renderGrid(){
     setTimeout(function(){ pendingGrid = false; preloadSnaps(); }, 1500);
   }
   var all = state.data ? state.data.skins || [] : [];
-  all.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  all.sort(function(a,b){
+    var l1 = a.likes || 0, l2 = b.likes || 0;
+    if(l1 !== l2) return l2 - l1;          /* 点赞多的靠前（热门排序） */
+    return (b.createdAt||0) - (a.createdAt||0);
+  });
   var gname = groupOfTab(activeTab);
   var list = gname ? all.filter(function(r){ return (r.group || "") === gname; }) : all;
   var kw = (searchVal || "").trim().toLowerCase();
@@ -642,7 +657,8 @@ function cardHtml(r){
     + (r.hd ? '<span class="hd-badge" title="128 高清皮肤：可预览与存储，无法生成换肤指令">128高清</span>' : '')
     + '<span class="badge">皮肤</span><span class="hint">点击播放动画</span>'
     + '</div>'
-    + '<div class="meta"><div class="nm">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></div>'
+    + '<div class="meta"><div class="nm"><span class="nmt">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></span>'
+    + '<button class="likeb' + (likedSet[r.id] ? " on" : "") + '" data-like="' + esc(r.id) + '" title="点赞：人气越高越靠前">♥ <em>' + (r.likes || 0) + '</em></button></div>'
     + '<div class="tm">' + fmtTime(r.createdAt) + '</div>'
     + '<button class="gbadge" data-grp="' + esc(r.id) + '" title="点击调整分组（需管理密码）">' + esc(grpName(r.group)) + ' ▾</button>'
     + '<button class="stbadge ' + (r.added ? "on" : "off") + '" data-st="' + esc(r.id) + '" title="点击切换加入状态（需管理密码）">' + (r.added ? "已加入" : "未加入") + '</button></div>'
@@ -682,6 +698,33 @@ function ensureLink(rec){
     });
   });
 }
+
+/* ===== 点赞 ===== */
+var likedSet = {};
+try{ likedSet = JSON.parse(localStorage.getItem("pifuLikes") || "{}") || {}; }catch(e){ likedSet = {}; }
+function saveLikes(){ try{ localStorage.setItem("pifuLikes", JSON.stringify(likedSet)); }catch(e){} }
+document.getElementById("skinGrid").addEventListener("click", function(e){
+  var lb = e.target.closest("button[data-like]");
+  if(!lb) return;
+  var id = lb.dataset.like;
+  var rec = null;
+  (state.data.skins || []).forEach(function(r){ if(r.id === id) rec = r; });
+  if(!rec) return;
+  var was = !!likedSet[id];
+  rec.likes = Math.max(0, (rec.likes || 0) + (was ? -1 : 1));
+  if(was){ delete likedSet[id]; } else { likedSet[id] = true; }
+  saveLikes();
+  state.data.updatedAt = Date.now();
+  renderGrid();   /* 乐观更新：立即反映点赞数与排序 */
+  saveWithRetry(0, function(){
+    state.data.skins.forEach(function(x){ if(x.id === id) x.likes = rec.likes; });
+    state.data.updatedAt = Date.now();
+  }).then(function(){
+    state._cb = Date.now();
+  }).catch(function(err){
+    toast("点赞保存失败：" + err.message, true);
+  });
+});
 
 /* 点击卡片 → 激活为唯一实时 3D（旋转+动画）；此前活跃的实时卡全部恢复静态正面 */
 function activateCard(canvas){
