@@ -269,7 +269,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v18</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v19</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -576,7 +576,7 @@ function cardHtml(r){
     + '<img class="snap" alt="">'
     + '<img class="fallback" data-src="' + clean + '" alt="" draggable="false">'
     + (r.hd ? '<span class="hd-badge" title="128 高清皮肤：可预览与存储，无法生成换肤指令">128高清</span>' : '')
-    + '<span class="badge">皮肤</span><span class="hint">按住拖拽旋转</span>'
+    + '<span class="badge">皮肤</span><span class="hint">点击播放动画</span>'
     + '</div>'
     + '<div class="meta"><div class="nm">' + esc(r.name || "未命名") + ' <span>· ' + esc(r.uploader || "匿名") + '</span></div>'
     + '<div class="tm">' + fmtTime(r.createdAt) + '</div>'
@@ -1264,7 +1264,18 @@ function snapInit(){
 function skinSnapshot(url, variant, cb){
   var file = url.split("/").pop();
   if(snapCache[file]) return cb(snapCache[file]);
-  snapQueue.push({ url: url, file: file, variant: variant, cb: cb });
+  /* 视口内的卡片优先渲染（插到队首）：滚动时用户看到的卡片立即显示 3D */
+  var inView = false;
+  var cvs = document.querySelectorAll(".card .ph canvas");
+  for(var i = 0; i < cvs.length; i++){
+    if(cvs[i].getAttribute("data-url") === url){
+      var r = cvs[i].getBoundingClientRect();
+      if(r.width && r.bottom > 0 && r.top < window.innerHeight) inView = true;
+      break;
+    }
+  }
+  var job = { url: url, file: file, variant: variant, cb: cb };
+  if(inView) snapQueue.unshift(job); else snapQueue.push(job);
   pumpSnap();
 }
 function pumpSnap(){
