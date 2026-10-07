@@ -22,9 +22,21 @@ body{
   padding:28px 18px 60px;
 }
 .wrap{max-width:1180px;margin:0 auto}
+/* 顶部吸顶栏：向下滚动时始终显示 */
+.topsticky{
+  position:sticky;top:0;z-index:60;
+  background:rgba(246,242,233,.95);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(0,0,0,.07);
+  box-shadow:0 6px 18px rgba(60,50,30,.05);
+  margin:0 -24px;padding:0 24px 2px;
+}
+@media (max-width:700px){
+  .topsticky{margin:0 -16px;padding:0 16px 2px}
+}
 /* 头部 */
 header{
-  display:flex;align-items:center;gap:14px;margin-bottom:22px;
+  display:flex;align-items:center;gap:14px;margin-bottom:16px;
 }
 header .logo{
   width:52px;height:52px;border-radius:16px;overflow:hidden;flex:none;
@@ -221,6 +233,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
 <div id="loadbar"></div>
 <div class="wrap">
 
+  <div class="topsticky">
   <header>
     <div class="logo" id="logoBox"></div>
     <div>
@@ -250,12 +263,13 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
       <option value="bear">动画：狗熊哆嗦毛</option>
     </select>
   </div>
+  </div>
 
   <div id="apiErr"></div>
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v17</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v18</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
