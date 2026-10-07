@@ -255,7 +255,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v10</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v12</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -476,10 +476,13 @@ function copyText(text){
 function loadData(quiet){
   if(!quiet) showLoad(true);
   return GH.readData().then(function(res){
+    var prevIds = (state.data && state.data.skins || []).map(function(x){ return x.id; }).join(",");
     state.data = res.data;
     state.sha = res.sha;
+    var nowIds = (state.data.skins || []).map(function(x){ return x.id; }).join(",");
     if(!quiet){ showLoad(false); showErr(""); }
-    renderGrid();
+    /* 皮肤集合没变化就不重建网格：保留已加载的实时 3D，避免 15s 轮询全量重建 */
+    if(prevIds !== nowIds || !prevIds) renderGrid();
   }).catch(function(err){
     if(!quiet){ showLoad(false); showErr("数据加载失败：" + err.message + "（请检查网络与令牌权限）"); }
     console.error(err);
@@ -1041,7 +1044,7 @@ document.querySelectorAll(".mask").forEach(function(mask){
 
 /* ===== 卡片内嵌 3D 渲染（Skinview3D，SkinsRestorer 同款）===== */
 var viewers = [];       /* {canvas, viewer} */
-var MAX_VIEWERS = 6;    /* 实时 3D 上限（浏览器 WebGL context 有限）；已加载的永不回收，其余卡片用共享渲染器渲染 3D 快照 */
+var MAX_VIEWERS = 14;   /* 实时 3D 上限（浏览器 WebGL context 极限）；已加载的永不回收，其余卡片用共享渲染器渲染 8 帧旋转快照 */
 var curAnim = "idle";
 var io = null;
 var DELETE_PW = "wd198114+";  /* 删除皮肤需输入的管理密码 */
@@ -1170,6 +1173,7 @@ function initCardViewer(canvas){
       if(fb){ fb.style.display = "none"; fb.dataset.hide = "1"; }
       var si = ph.querySelector(".snap");
       if(si){ si.style.display = "none"; }
+      delete snapPlayers[file];
       canvas.style.display = "";
     }).catch(function(){
       /* 3D 加载失败：保留 2D 图 */
@@ -1208,9 +1212,6 @@ function snapInit(){
 function skinSnapshot(url, variant, cb){
   var file = url.split("/").pop();
   if(snapCache[file]) return cb(snapCache[file]);
-  var ls = null;
-  try{ ls = localStorage.getItem("snaps:" + file); }catch(e){}
-  if(ls){ snapCache[file] = ls; return cb(ls); }
   snapQueue.push({ url: url, file: file, variant: variant, cb: cb });
   pumpSnap();
 }
@@ -1222,12 +1223,15 @@ function pumpSnap(){
   try{
     snapRenderer.loadSkin(job.url, { model: job.variant === "slim" ? "slim" : "default" }).then(function(){
       try{
-        snapRenderer.render();
-        var d = snapCanvas.toDataURL("image/png");
-        snapCache[job.file] = d;
-        try{ localStorage.setItem("snaps:" + job.file, d); }catch(e){}
+        var frames = [];
+        for(var i = 0; i < 8; i++){
+          snapRenderer.playerObject.rotation.y = i * Math.PI / 4;
+          snapRenderer.render();
+          frames.push(snapCanvas.toDataURL("image/png"));
+        }
+        snapCache[job.file] = frames;
         snapBusy = false;
-        job.cb(d);
+        job.cb(frames);
       }catch(e){ snapBusy = false; job.cb(null); }
       pumpSnap();
     }).catch(function(){ snapBusy = false; job.cb(null); pumpSnap(); });
@@ -1239,13 +1243,30 @@ function renderSnapFor(canvas){
   if(!img) return;
   var url = canvas.getAttribute("data-url");
   var variant = canvas.getAttribute("data-variant") || "classic";
-  skinSnapshot(url, variant, function(d){
-    if(!canvas.isConnected || !d) return;
-    img.src = d;
+  skinSnapshot(url, variant, function(frames){
+    if(!canvas.isConnected || !frames || !frames.length) return;
+    var file = url.split("/").pop();
+    img.src = frames[0];
     img.style.display = "block";
     canvas.style.display = "none";
+    snapPlayers[file] = { img: img, frames: frames, idx: 0 };
   });
 }
+/* 快照轮播：让所有快照卡片持续旋转（每 260ms 切一帧） */
+var snapPlayers = {};
+var snapTicker = null;
+function ensureSnapTicker(){
+  if(snapTicker) return;
+  snapTicker = setInterval(function(){
+    for(var k in snapPlayers){
+      var sp = snapPlayers[k];
+      if(!sp.img || !sp.img.isConnected){ delete snapPlayers[k]; continue; }
+      sp.idx = (sp.idx + 1) % sp.frames.length;
+      try{ sp.img.src = sp.frames[sp.idx]; }catch(e){}
+    }
+  }, 260);
+}
+ensureSnapTicker();
 /* 渲染完成后给所有还没有 3D 的卡片排队渲染快照（全站同时显示 3D） */
 function preloadSnaps(){
   var cs = document.querySelectorAll(".card .ph canvas");
