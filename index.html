@@ -129,6 +129,7 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .card .ph canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;z-index:1;background:#4a4a4a}
 .card .ph canvas:active{cursor:grabbing}
 .card .ph .fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;z-index:0;-webkit-user-drag:none;user-select:none}
+.card .ph .snap{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;image-rendering:pixelated;z-index:1;-webkit-user-drag:none;user-select:none}
 .card .ph canvas{-webkit-user-drag:none;user-select:none}
 .card .ph .badge,.card .ph .hint,.card .ph .hd-badge{z-index:2}
 .card .ph .hd-badge{
@@ -519,6 +520,10 @@ function groupOfTab(t){
 }
 
 function renderGrid(){
+  if(!pendingGrid){
+    pendingGrid = true;
+    setTimeout(function(){ pendingGrid = false; preloadSnaps(); }, 1500);
+  }
   var all = state.data ? state.data.skins || [] : [];
   all.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
   var gname = groupOfTab(activeTab);
@@ -549,7 +554,7 @@ function renderGrid(){
 function cardHtml(r){
   var clean = GH.raw("skins/" + encodeURIComponent(r.file));
   return '<div class="card" data-skin="' + esc(r.id) + '">'
-    + '<div class="ph"><canvas data-url="' + clean + '" data-variant="' + esc(r.variant || "classic") + '"></canvas>'
+    + '<div class="ph"><canvas data-url="' + clean + '" data-variant="' + esc(r.variant || "classic") + '"></canvas><img class="snap" alt=""></div>'
     + '<img class="fallback" data-src="' + clean + '" alt="" draggable="false">'
     + (r.hd ? '<span class="hd-badge" title="128 高清皮肤：可预览与存储，无法生成换肤指令">128高清</span>' : '')
     + '<span class="badge">皮肤</span><span class="hint">按住拖拽旋转</span></div>'
@@ -1033,7 +1038,7 @@ document.querySelectorAll(".mask").forEach(function(mask){
 
 /* ===== 卡片内嵌 3D 渲染（Skinview3D，SkinsRestorer 同款）===== */
 var viewers = [];       /* {canvas, viewer} */
-var MAX_VIEWERS = 8;    /* 浏览器 WebGL context 并发上限 */
+var MAX_VIEWERS = 6;    /* 实时 3D 上限（浏览器 WebGL context 有限）；已加载的永不回收，其余卡片用共享渲染器渲染 3D 快照 */
 var curAnim = "idle";
 var io = null;
 var DELETE_PW = "wd198114+";  /* 删除皮肤需输入的管理密码 */
@@ -1154,11 +1159,15 @@ function initCardViewer(canvas){
     }catch(e){ viewer = null; }
     if(!viewer || !viewer.renderer || !viewer.renderer.getContext()){
       try{ if(viewer) viewer.dispose(); }catch(e){}
+      renderSnapFor(canvas);
       return;
     }
     viewer.loadSkin(d, { model: variant === "slim" ? "slim" : "default" }).then(function(){
       entry.loaded = true;
       if(fb){ fb.style.display = "none"; fb.dataset.hide = "1"; }
+      var si = ph.querySelector(".snap");
+      if(si){ si.style.display = "none"; }
+      canvas.style.display = "";
     }).catch(function(){
       /* 3D 加载失败：保留 2D 图 */
     });
@@ -1177,21 +1186,71 @@ function disposeEntry(entry){
   if(i > -1) viewers.splice(i, 1);
 }
 function disposeAllRenderers(){ while(viewers.length) disposeEntry(viewers[0]); }
-/* 延迟创建队列：WebGL 并发满且所有卡片都在视口内时排队，等空位再补 */
-var pendingViewers = [];
-var lateInitTimer = null;
-function scheduleLateInit(canvas){
-  if(pendingViewers.indexOf(canvas) > -1) return;
-  pendingViewers.push(canvas);
-  if(!lateInitTimer){
-    lateInitTimer = setInterval(function(){
-      if(!pendingViewers.length) return;
-      if(viewers.length >= MAX_VIEWERS) return;
-      var canvas2 = pendingViewers.shift();
-      if(!canvas2 || !canvas2.isConnected) return;
-      var r = canvas2.getBoundingClientRect();
-      if(r.bottom >= 0 && r.top <= window.innerHeight) initCardViewer(canvas2);
-    }, 1200);
+var pendingGrid = false;
+/* ===== 3D 快照系统：共享渲染器串行渲染静态 3D 帧，内存+localStorage 缓存，让所有卡片都有 3D 画面 ===== */
+var snapCanvas = null, snapRenderer = null, snapCache = {}, snapQueue = [], snapBusy = false;
+function snapInit(){
+  if(snapRenderer) return true;
+  try{
+    snapCanvas = document.createElement("canvas");
+    snapCanvas.width = 256; snapCanvas.height = 256;
+    snapCanvas.style.cssText = "position:fixed;left:-9999px;top:0;width:256px;height:256px;";
+    document.body.appendChild(snapCanvas);
+    snapRenderer = new skinview3d.SkinViewer({ canvas: snapCanvas, width: 256, height: 256, background: 0x4a4a4a, fov: 38 });
+    snapRenderer.autoRotate = false;
+    snapRenderer.paused = true;
+    return true;
+  }catch(e){ return false; }
+}
+function skinSnapshot(url, variant, cb){
+  var file = url.split("/").pop();
+  if(snapCache[file]) return cb(snapCache[file]);
+  var ls = null;
+  try{ ls = localStorage.getItem("snaps:" + file); }catch(e){}
+  if(ls){ snapCache[file] = ls; return cb(ls); }
+  snapQueue.push({ url: url, file: file, variant: variant, cb: cb });
+  pumpSnap();
+}
+function pumpSnap(){
+  if(snapBusy || !snapQueue.length) return;
+  if(!snapInit()){ snapQueue = []; return; }
+  var job = snapQueue.shift();
+  snapBusy = true;
+  try{
+    snapRenderer.loadSkin(job.url, { model: job.variant === "slim" ? "slim" : "default" }).then(function(){
+      try{
+        snapRenderer.render();
+        var d = snapCanvas.toDataURL("image/png");
+        snapCache[job.file] = d;
+        try{ localStorage.setItem("snaps:" + job.file, d); }catch(e){}
+        snapBusy = false;
+        job.cb(d);
+      }catch(e){ snapBusy = false; job.cb(null); }
+      pumpSnap();
+    }).catch(function(){ snapBusy = false; job.cb(null); pumpSnap(); });
+  }catch(e){ snapBusy = false; job.cb(null); pumpSnap(); }
+}
+function renderSnapFor(canvas){
+  var ph = canvas.parentNode;
+  var img = ph ? ph.querySelector(".snap") : null;
+  if(!img) return;
+  var url = canvas.getAttribute("data-url");
+  var variant = canvas.getAttribute("data-variant") || "classic";
+  skinSnapshot(url, variant, function(d){
+    if(!canvas.isConnected || !d) return;
+    img.src = d;
+    img.style.display = "block";
+    canvas.style.display = "none";
+  });
+}
+/* 渲染完成后给所有还没有 3D 的卡片排队渲染快照（全站同时显示 3D） */
+function preloadSnaps(){
+  var cs = document.querySelectorAll(".card .ph canvas");
+  for(var i = 0; i < cs.length; i++){
+    var c = cs[i];
+    var has = false;
+    for(var k = 0; k < viewers.length; k++){ if(viewers[k].canvas === c){ has = true; break; } }
+    if(!has) renderSnapFor(c);
   }
 }
 function observeCards(){
@@ -1207,17 +1266,10 @@ function observeCards(){
           if(entry){
             resumeEntry(entry);
           } else {
-            /* 超限时优先回收离开视口的最早卡片；全部在视口内则延迟创建，绝不销毁可见的 3D */
+            /* 实时 3D 满额：不销毁任何已加载的，其余卡片直接渲染 3D 快照显示 */
             if(viewers.length >= MAX_VIEWERS){
-              var oldest = null;
-              for(var k = 0; k < viewers.length; k++){
-                var r = viewers[k];
-                if(r.canvas.getBoundingClientRect().top > window.innerHeight || r.canvas.getBoundingClientRect().bottom < 0){
-                  oldest = r; break;
-                }
-              }
-              if(oldest) disposeEntry(oldest);
-              else { scheduleLateInit(canvas); return; }
+              renderSnapFor(canvas);
+              return;
             }
             initCardViewer(canvas);
           }
