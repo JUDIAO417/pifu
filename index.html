@@ -330,7 +330,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v29</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v30</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -654,6 +654,9 @@ function fillGroupSelect(selId, keep){
   if(keep !== undefined){ sel.value = keep; }
   else{
     var def = "";
+    if(activeTab !== "__all__" && !lk[activeTab] && gs.indexOf(activeTab) >= 0){
+      def = activeTab;   /* 当前所在标签未锁定：默认上传到当前标签 */
+    }
     gs.forEach(function(g){ if(!lk[g] && !def) def = g; });
     sel.value = def || "";
   }
@@ -1149,6 +1152,11 @@ function askModal(opts){
 
 /* ===== 上传 ===== */
 function openUpload(){
+  var _cur = activeTab;
+  if(_cur !== "__all__" && lockedSet()[_cur]){
+    toast("「" + _cur + "」标签已上锁，不能上传皮肤", true);
+    return;
+  }
   pendingFile = null; pendingDim = null; pendingHd = false;
   if(upViewer){ try{ upViewer.dispose(); }catch(e){} upViewer = null; }
   upSkinData = null;
