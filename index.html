@@ -90,6 +90,21 @@ header p{font-size:13px;color:var(--ink-soft);margin-top:3px}
   display:flex;gap:6px;background:var(--glass);border:1px solid var(--glass-bd);
   border-radius:14px;padding:4px;backdrop-filter:blur(14px);
 }
+
+.tablock{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;
+  margin-left:4px;background:rgba(255,255,255,.55);border:1px solid var(--glass-bd);
+  cursor:pointer;vertical-align:middle;transition:transform .15s,background .15s;
+}
+.tablock:hover{transform:scale(1.15)}
+.tablock.on{background:#ff5d5d;border-color:#ff5d5d}
+.tabadd{
+  border:1px dashed var(--ink-soft);background:transparent;color:var(--ink-soft);
+  border-radius:99px;padding:4px 11px;font-size:13px;cursor:pointer;margin-left:6px;flex:none;
+  transition:color .15s,border-color .15s;
+}
+.tabadd:hover{color:var(--ink);border-color:var(--ink)}
 .tab{
   border:none;background:transparent;padding:8px 16px;border-radius:10px;
   font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:all .18s;
@@ -290,11 +305,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="bar">
     <div class="bar-r1">
       <span class="stat"><b id="skinCount">0</b>个皮肤</span>
-      <div class="tabs" id="groupTabs">
-        <button class="tab" data-tab="all">全部</button>
-        <button class="tab active" data-tab="player">玩家皮肤征集</button>
-        <button class="tab" data-tab="cos">服务器cos皮肤</button>
-      </div>
+      <div class="tabs" id="groupTabs"></div>
     </div>
     <div class="bar-r2">
       <button class="btn" id="openUploadBtn">＋ 上传皮肤</button>
@@ -319,7 +330,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
   <div class="grid" id="skinGrid"></div>
   <div id="empty"><div class="big">📮</div><p>玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧</p></div>
 
-  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v28</span></footer>
+  <footer>乌龙茶的皮肤小屋 <span id="ver" style="opacity:.55">· v29</span></footer>
 </div>
 
 <!-- 调整分组弹窗 -->
@@ -344,11 +355,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
     <h3>调整分组</h3>
     <div class="field">
       <label id="grpSkinName">皮肤</label>
-      <select class="sel" id="grpSelect" style="width:100%">
-        <option value="">未分组</option>
-        <option value="玩家皮肤征集">玩家皮肤征集</option>
-        <option value="服务器cos皮肤">服务器cos皮肤</option>
-      </select>
+      <select class="sel" id="grpSelect" style="width:100%"></select>
     </div>
     <div class="row">
       <button class="btn ghost" data-close="maskGrp">取消</button>
@@ -376,11 +383,7 @@ footer{text-align:center;color:var(--ink-faint);font-size:12px;margin-top:34px}
     </div>
     <div class="field">
       <label>所属分组</label>
-      <select class="sel" id="upGroup" style="width:100%">
-        <option value="玩家皮肤征集">玩家皮肤征集</option>
-        <option value="服务器cos皮肤">服务器cos皮肤</option>
-        <option value="">未分组</option>
-      </select>
+      <select class="sel" id="upGroup" style="width:100%"></select>
     </div>
     <div class="field">
       <label>皮肤名字</label>
@@ -587,9 +590,9 @@ function saveWithRetry(attempt, reapply){
 }
 
 /* ===== 列表渲染 ===== */
-var GROUP_PLAYER = "玩家皮肤征集";  /* 玩家皮肤征集群名称 */
-var GROUP_COS = "服务器cos皮肤";      /* 服务器 cos 皮肤分组名称 */
-var activeTab = "player";              /* 默认进入玩家皮肤征集分组 */
+var DEFAULT_GROUPS = ["玩家皮肤征集", "服务器cos皮肤"];  /* 默认标签页 */
+var GROUP_PLAYER = DEFAULT_GROUPS[0];                    /* 兼容旧引用 */
+var activeTab = "";                                       /* 空=数据加载后自动进入第一个标签 */
 var searchVal = "";                    /* 搜索关键词 */
 var searchT = null;
 document.getElementById("searchInput").addEventListener("input", function(){
@@ -597,22 +600,114 @@ document.getElementById("searchInput").addEventListener("input", function(){
   clearTimeout(searchT);
   searchT = setTimeout(function(){ renderGrid(); }, 250);
 });
-/* 分组名 -> tab id */
-function tabOfGroup(g){
-  if(g === GROUP_PLAYER) return "player";
-  if(g === GROUP_COS) return "cos";
-  return "all";
-}
 /* 分组名显示：空值显示为未分组 */
 function grpName(g){ return g || "未分组"; }
-/* tab id -> 分组名（all 返回 null 表示不过滤） */
-function groupOfTab(t){
-  if(t === "player") return GROUP_PLAYER;
-  if(t === "cos") return GROUP_COS;
-  return null;
+/* 动态标签列表（含用户自定义） */
+function tabList(){
+  return (state.data && state.data.groups && state.data.groups.length)
+    ? state.data.groups.slice() : DEFAULT_GROUPS.slice();
+}
+/* 已上锁标签集合 */
+function lockedSet(){
+  var o = {};
+  ((state.data && state.data.lockedTabs) || []).forEach(function(g){ o[g] = true; });
+  return o;
+}
+/* 渲染标签栏：全部 + 各分组 + 添加按钮；锁定的标签显示 🔒 */
+function renderTabs(){
+  var el = document.getElementById("groupTabs");
+  var gs = tabList();
+  if(!activeTab || (activeTab !== "__all__" && gs.indexOf(activeTab) < 0)){
+    activeTab = gs.length ? gs[0] : "__all__";
+  }
+  var lk = lockedSet();
+  var html = '<button class="tab' + (activeTab === "__all__" ? " active" : "") + '" data-tab="__all__">全部</button>';
+  gs.forEach(function(g){
+    html += '<button class="tab' + (activeTab === g ? " active" : "") + '" data-tab="' + esc(g) + '">' + esc(g)
+      + ' <span class="tablock' + (lk[g] ? " on" : "") + '" data-lock="' + esc(g) + '" title="' + (lk[g] ? "已上锁：不能上传到该标签，点击解锁" : "未上锁：点击上锁后不能上传到该标签") + '（需管理密码）">' + (lk[g] ? "🔒" : "🔓") + '</span></button>';
+  });
+  html += '<button class="tabadd" data-addtab title="添加标签页（需管理密码）">＋</button>';
+  el.innerHTML = html;
+}
+/* 皮肤是否属于当前标签（"玩家皮肤"同步显示"玩家皮肤征集"） */
+function matchTab(r){
+  var g = activeTab, rg = r.group || "";
+  if(g === "__all__") return true;
+  if(g === "玩家皮肤") return rg === "玩家皮肤" || rg === "玩家皮肤征集";
+  return rg === g;
+}
+/* 分组名 -> 对应标签 id（无对应则全部） */
+function tabOfGroup(g){
+  if(!g) return "__all__";
+  return tabList().indexOf(g) >= 0 ? g : "__all__";
+}
+/* 填充分组下拉（锁定的标签置灰不可选；未指定时默认选第一个未锁定分组） */
+function fillGroupSelect(selId, keep){
+  var sel = document.getElementById(selId);
+  var gs = tabList(), lk = lockedSet();
+  var html = '';
+  gs.forEach(function(g){
+    html += '<option value="' + esc(g) + '"' + (lk[g] ? " disabled" : "") + '>' + esc(g) + (lk[g] ? "（已上锁）" : "") + '</option>';
+  });
+  html += '<option value="">未分组</option>';
+  sel.innerHTML = html;
+  if(keep !== undefined){ sel.value = keep; }
+  else{
+    var def = "";
+    gs.forEach(function(g){ if(!lk[g] && !def) def = g; });
+    sel.value = def || "";
+  }
+}
+/* 上锁/解锁标签（需管理密码） */
+function toggleLock(g){
+  askModal({ secret: true, label: "上锁/解锁「" + g + "」需要管理密码：" }).then(function(pw){
+    if(pw === null) return;
+    if(pw !== DELETE_PW){ toast("密码错误，无法上锁", true); return; }
+    var lk = (state.data.lockedTabs || []).slice();
+    var i = lk.indexOf(g);
+    if(i >= 0){ lk.splice(i, 1); } else { lk.push(g); }
+    state.data.lockedTabs = lk;
+    state.data.updatedAt = Date.now();
+    saveWithRetry(0, function(){
+      state.data.lockedTabs = lk;
+      state.data.updatedAt = Date.now();
+    }).then(function(){
+      toast(lk.indexOf(g) >= 0 ? "已上锁「" + g + "」" : "已解锁「" + g + "」");
+      state._cb = Date.now();
+      renderGrid();
+    }).catch(function(err){ toast("保存失败：" + err.message, true); });
+  });
+}
+/* 添加标签页（需管理密码） */
+function addTab(){
+  askModal({ secret: true, label: "添加标签页需要管理密码：" }).then(function(pw){
+    if(pw === null) return;
+    if(pw !== DELETE_PW){ toast("密码错误，无法添加", true); return; }
+    askModal({ label: "输入新标签页名称（不能与现有标签重名）：", value: "" }).then(function(nm){
+      if(nm === null) return;
+      nm = (nm || "").trim();
+      if(!nm){ toast("名称不能为空", true); return; }
+      var gs = tabList();
+      if(gs.indexOf(nm) >= 0){ toast("已存在同名标签页", true); return; }
+      state.data.groups = (state.data.groups && state.data.groups.length) ? state.data.groups.slice() : DEFAULT_GROUPS.slice();
+      state.data.groups.push(nm);
+      state.data.updatedAt = Date.now();
+      activeTab = nm;
+      renderTabs();
+      saveWithRetry(0, function(){
+        if(state.data.groups.indexOf(nm) < 0) state.data.groups.push(nm);
+        state.data.updatedAt = Date.now();
+      }).then(function(){
+        toast("已添加标签页「" + nm + "」");
+        state._cb = Date.now();
+        renderGrid();
+      }).catch(function(err){ toast("保存失败：" + err.message, true); });
+    });
+  });
 }
 
 function renderGrid(){
+  renderTabs();
   if(!pendingGrid){
     pendingGrid = true;
     setTimeout(function(){ pendingGrid = false; preloadSnaps(); }, 1500);
@@ -623,8 +718,7 @@ function renderGrid(){
     if(l1 !== l2) return l2 - l1;          /* 点赞多的靠前（热门排序） */
     return (b.createdAt||0) - (a.createdAt||0);
   });
-  var gname = groupOfTab(activeTab);
-  var list = gname ? all.filter(function(r){ return (r.group || "") === gname; }) : all;
+  var list = all.filter(matchTab);
   var kw = (searchVal || "").trim().toLowerCase();
   if(kw){
     list = list.filter(function(r){
@@ -637,12 +731,10 @@ function renderGrid(){
   disposeAllRenderers();
   if(list.length === 0){
     grid.innerHTML = "";
-    empty.querySelector(".big").textContent = activeTab === "player" ? "📮" : activeTab === "cos" ? "🎭" : "🧊";
-    empty.querySelector("p").textContent = activeTab === "player"
-      ? "玩家皮肤征集群还没有皮肤，点上方「上传皮肤」投一个吧"
-      : activeTab === "cos"
-        ? "服务器cos皮肤分组还没有皮肤，点上方「上传皮肤」添加一个吧"
-        : "还没有皮肤，点上方「上传皮肤」添加第一个吧";
+    empty.querySelector(".big").textContent = activeTab === "__all__" ? "🧊" : "📭";
+    empty.querySelector("p").textContent = activeTab === "__all__"
+      ? "还没有皮肤，点上方「上传皮肤」添加第一个吧"
+      : "「" + activeTab + "」还没有皮肤，点上方「上传皮肤」添加一个吧";
     empty.classList.add("show");
     return;
   }
@@ -843,6 +935,12 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
     if(pw !== DELETE_PW){ toast("密码错误，无法调整", true); return; }
     grpTarget = id;
     document.getElementById("grpSkinName").textContent = "皮肤：" + (rec.name || "未命名");
+    var __gs2 = tabList(), __lk2 = lockedSet();
+    var __extra = (rec.group && __gs2.indexOf(rec.group) < 0) ? [rec.group] : [];
+    var __h2 = '<option value="">未分组</option>';
+    __gs2.forEach(function(g){ __h2 += '<option value="' + esc(g) + '"' + (__lk2[g] ? " disabled" : "") + '>' + esc(g) + (__lk2[g] ? "（已上锁）" : "") + '</option>'; });
+    __extra.forEach(function(g){ __h2 += '<option value="' + esc(g) + '">' + esc(g) + '</option>'; });
+    document.getElementById("grpSelect").innerHTML = __h2;
     document.getElementById("grpSelect").value = rec.group || "";
     document.getElementById("maskGrp").classList.add("show");
   });
@@ -971,12 +1069,14 @@ document.getElementById("skinGrid").addEventListener("click", function(e){
 });
 document.getElementById("refreshBtn").addEventListener("click", function(){ loadData(); });
 document.getElementById("groupTabs").addEventListener("click", function(e){
+  var lb = e.target.closest("[data-lock]");
+  if(lb){ toggleLock(lb.dataset.lock); return; }
+  var ab = e.target.closest("[data-addtab]");
+  if(ab){ addTab(); return; }
   var t = e.target.closest(".tab");
   if(!t || t.dataset.tab === activeTab) return;
   activeTab = t.dataset.tab;
-  document.querySelectorAll("#groupTabs .tab").forEach(function(x){
-    x.classList.toggle("active", x === t);
-  });
+  renderTabs();
   renderGrid();
 });
 
@@ -1056,7 +1156,7 @@ function openUpload(){
   document.getElementById("upName").value = "";
   document.getElementById("upUploader").value = "";
   document.getElementById("upPreview").style.display = "none";
-  document.getElementById("upGroup").value = GROUP_PLAYER;
+  fillGroupSelect("upGroup");
   document.getElementById("upConfirm").disabled = false;
   document.getElementById("cmdWrap").style.display = "none";
   document.getElementById("cmdRetry").style.display = "none";
@@ -1241,6 +1341,7 @@ document.getElementById("upConfirm").addEventListener("click", function(){
     var b64 = i >= 0 ? s.slice(i + 7) : s;
     var fname = Date.now() + "_" + Math.floor(Math.random() * 999) + ".png";
     var group = document.getElementById("upGroup").value || "";
+    if(lockedSet()[group]){ toast("该标签已上锁，不能上传皮肤", true); return; }
     var rec = { id: "skin" + Date.now(), file: fname, name: name, uploader: uploader, createdAt: Date.now(), variant: variant, group: group, hd: !!pendingHd };
     GH.putSkin(fname, b64).then(function(){
       state.data.skins.push(rec);
@@ -1253,14 +1354,12 @@ document.getElementById("upConfirm").addEventListener("click", function(){
       });
     }).then(function(){
       showLoad(false);
-      toast("皮肤「" + name + "」已上传" + (group === GROUP_PLAYER ? "到玩家皮肤征集" : "") + "，正在同步数据…");
+      toast("皮肤「" + name + "」已上传" + (group ? "到「" + group + "」" : "") + "，正在同步数据…");
       state._cb = Date.now();
       var gtab = tabOfGroup(group);
-      if(gtab !== "all" && activeTab !== gtab){
+      if(gtab !== "__all__" && activeTab !== gtab){
         activeTab = gtab;
-        document.querySelectorAll("#groupTabs .tab").forEach(function(x){
-          x.classList.toggle("active", x.dataset.tab === gtab);
-        });
+        renderTabs();
       }
       renderGrid();
       pendingRawUrl = GH.raw("skins/" + encodeURIComponent(fname));
